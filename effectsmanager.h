@@ -128,19 +128,12 @@ public:
 
         _workerThread = thread([this, &canvas]() 
         {
-            auto frameDuration = milliseconds(1000) / _fps; // Target duration per frame
+            auto frameDuration = 1000ms / _fps; // Target duration per frame
             auto nextFrameTime = steady_clock::now();
             constexpr auto bUseCompression = true;
 
             while (_running)
             {
-                auto now = steady_clock::now();
-                if (now < nextFrameTime)
-                {
-                    // Sleep only if we're ahead of schedule
-                    this_thread::sleep_for(nextFrameTime - now);
-                }
-
                 // Update the effects and enqueue frames
                 UpdateCurrentEffect(canvas, frameDuration);
                 for (const auto &feature : canvas.Features())
@@ -155,6 +148,12 @@ public:
                     {
                         feature->Socket().EnqueueFrame(std::move(frame));
                     }
+                }
+
+                auto now = steady_clock::now();
+                while (now < nextFrameTime && _running) {
+                    this_thread::sleep_for(min(steady_clock::duration(10ms), nextFrameTime - now));
+                    now = steady_clock::now(); // Update 'now' to avoid an infinite loop
                 }
 
                 // Set the next frame target

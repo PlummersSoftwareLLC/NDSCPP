@@ -1,0 +1,222 @@
+[
+    {
+        "features": [
+            {
+                "channel": 0,
+                "friendlyName": "Mesmerizer",
+                "height": 32,
+                "hostName": "192.168.8.161",
+                "offsetX": 0,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "stats": {
+                    "brightness": 0.0,
+                    "bufferPos": 15,
+                    "bufferSize": 180,
+                    "currentClock": 1732594789.404718,
+                    "flashVersion": 40,
+                    "fpsDrawing": 36,
+                    "newestPacket": 4.59520697593689,
+                    "oldestPacket": 4.595242977142334,
+                    "responseSize": 72,
+                    "sequence": 322181,
+                    "watts": 0,
+                    "wifiSignal": -40.0
+                },
+                "width": 64
+            }
+        ],
+        "height": 32,
+        "id": 0,
+        "width": 64
+    },
+    {
+        "features": [
+            {
+                "channel": 0,
+                "friendlyName": "Banner",
+                "height": 32,
+                "hostName": "192.168.1.98",
+                "offsetX": 0,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "stats": {
+                    "brightness": 100.0,
+                    "bufferPos": 56,
+                    "bufferSize": 500,
+                    "currentClock": 1732594789.557855,
+                    "flashVersion": 0,
+                    "fpsDrawing": 24,
+                    "newestPacket": 9.936142109176636,
+                    "oldestPacket": 7.721737109176636,
+                    "responseSize": 72,
+                    "sequence": 272064,
+                    "watts": 0,
+                    "wifiSignal": 99.0
+                },
+                "width": 512
+            }
+        ],
+        "height": 32,
+        "id": 1,
+        "width": 512
+    },
+    {
+        "features": [
+            {
+                "channel": 0,
+                "friendlyName": "Window1",
+                "height": 1,
+                "hostName": "192.168.8.8",
+                "offsetX": 0,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "width": 100
+            }
+        ],
+        "height": 1,
+        "id": 2,
+        "width": 100
+    },
+    {
+        "features": [
+            {
+                "channel": 0,
+                "friendlyName": "Window2",
+                "height": 1,
+                "hostName": "192.168.8.9",
+                "offsetX": 0,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "width": 100
+            }
+        ],
+        "height": 1,
+        "id": 3,
+        "width": 100
+    },
+    {
+        "features": [
+            {
+                "channel": 0,
+                "friendlyName": "Window3",
+                "height": 1,
+                "hostName": "192.168.8.10",
+                "offsetX": 0,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "width": 100
+            }
+        ],
+        "height": 1,
+        "id": 4,
+        "width": 100
+    },
+    {
+        "features": [
+            {
+                "channel": 0,
+                "friendlyName": "Cupboard1",
+                "height": 1,
+                "hostName": "192.168.8.12",
+                "offsetX": 0,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "width": 500
+            },
+            {
+                "channel": 0,
+                "friendlyName": "Cupboard2",
+                "height": 1,
+                "hostName": "192.168.8.29",
+                "offsetX": 500,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "width": 600
+            },
+            {
+                "channel": 0,
+                "friendlyName": "Cupboard3",
+                "height": 1,
+                "hostName": "192.168.8.30",
+                "offsetX": 1100,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "width": 144
+            },
+            {
+                "channel": 0,
+                "friendlyName": "Cupboard4",
+                "height": 1,
+                "hostName": "192.168.8.15",
+                "offsetX": 1244,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "width": 144
+            }
+        ],
+        "height": 1,
+        "id": 5,
+        "width": 1388
+    },
+    {
+        "features": [
+            {
+                "channel": 0,
+                "friendlyName": "CBWEST",
+                "height": 1,
+                "hostName": "192.168.8.36",
+                "offsetX": 0,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "width": 1151
+            },
+            {
+                "channel": 0,
+                "friendlyName": "CBEAST1",
+                "height": 1,
+                "hostName": "192.168.8.5",
+                "offsetX": 1151,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": true,
+                "width": 775
+            },
+            {
+                "channel": 0,
+                "friendlyName": "CBEAST2",
+                "height": 1,
+                "hostName": "192.168.8.37",
+                "offsetX": 1926,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "width": 926
+            },
+            {
+                "channel": 0,
+                "friendlyName": "CBEAST3",
+                "height": 1,
+                "hostName": "192.168.8.31",
+                "offsetX": 2852,
+                "offsetY": 0,
+                "redGreenSwap": false,
+                "reversed": false,
+                "width": 1129
+            }
+        ],
+        "height": 1,
+        "id": 6,
+        "width": 3981
+    }
+]

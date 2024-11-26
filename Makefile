@@ -7,7 +7,7 @@ LIBS=-lpthread -lz -lavformat -lavcodec -lavutil -lswscale -lswresample
 
 DEPFLAGS=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 
-SOURCES=main.cpp
+SOURCES=main.cpp palette.cpp
 EXECUTABLE=ndscpp
 DEPDIR=.deps
 OBJECTS:=$(SOURCES:.cpp=.o)

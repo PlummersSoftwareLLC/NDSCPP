@@ -20,6 +20,6 @@ public:
 
     void Update(ICanvas& canvas, milliseconds deltaTime) override
     {
-        canvas.Graphics().Clear(CRGB::Green);
+        canvas.Graphics().Clear(CHSV(HUE_GREEN));
     }
 };
