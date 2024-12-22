@@ -480,7 +480,7 @@ class Controller : public IController
 
     vector<shared_ptr<ISocketChannel>> GetSockets() const override
     {
-        std::lock_guard<std::mutex> lock(_canvasMutex);
+        lock_guard<mutex> lock(_canvasMutex);
         vector<shared_ptr<ISocketChannel>> sockets;
         for (const auto &canvas : _canvases)
             for (const auto &feature : canvas->Features())

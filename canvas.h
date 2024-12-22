@@ -55,25 +55,25 @@ public:
 
     ILEDGraphics & Graphics() override
     {
-        std::lock_guard<std::mutex> lock(_featuresMutex);
+        lock_guard<mutex> lock(_featuresMutex);
         return _graphics;
     }
     
     const ILEDGraphics& Graphics() const override 
     { 
-        std::lock_guard<std::mutex> lock(_featuresMutex);
+        lock_guard<mutex> lock(_featuresMutex);
         return _graphics; 
     }
 
     IEffectsManager & Effects() override
     {
-        std::lock_guard<std::mutex> lock(_featuresMutex);
+        lock_guard<mutex> lock(_featuresMutex);
         return _effects;
     }
 
     const IEffectsManager & Effects() const override
     {
-        std::lock_guard<std::mutex> lock(_featuresMutex);
+        lock_guard<mutex> lock(_featuresMutex);
         return _effects;
     }
 
@@ -144,7 +144,7 @@ inline void to_json(nlohmann::json& j, const ICanvas& canvas)
     };
 }
 
-inline void to_json(nlohmann::json& j, const std::shared_ptr<ICanvas>& canvasPtr) 
+inline void to_json(nlohmann::json& j, const shared_ptr<ICanvas>& canvasPtr) 
 {
     if (canvasPtr) {
         j = *canvasPtr; // Use the `to_json` function for ICanvas
@@ -158,8 +158,8 @@ inline void to_json(nlohmann::json& j, const std::shared_ptr<ICanvas>& canvasPtr
 inline void from_json(const nlohmann::json& j, shared_ptr<ICanvas> & canvas) 
 {
     // Create canvas with required fields
-    canvas = std::make_shared<Canvas>(
-        j.at("name").get<std::string>(),
+    canvas = make_shared<Canvas>(
+        j.at("name").get<string>(),
         j.at("width").get<uint32_t>(),
         j.at("height").get<uint32_t>(),
         j.value("fps", 30u) // Default FPS to 30 if not provided

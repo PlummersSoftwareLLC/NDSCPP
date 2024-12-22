@@ -283,7 +283,7 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
 
 inline void to_json(nlohmann::json &j, const ILEDEffect &effect)
 {
-    std::string type = typeid(effect).name();
+    string type = typeid(effect).name();
     auto it = to_from_json_map.find(type);
     if (it == to_from_json_map.end())
     {
