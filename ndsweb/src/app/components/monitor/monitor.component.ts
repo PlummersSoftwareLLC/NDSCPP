@@ -1,16 +1,35 @@
 import { SelectionModel } from '@angular/cdk/collections';
 import { moveItemInArray } from '@angular/cdk/drag-drop';
-import { CommonModule, NgTemplateOutlet } from '@angular/common';
-import { Component, HostListener, inject, input, OnChanges, output, SimpleChanges } from '@angular/core';
+import { CommonModule, NgClass, NgTemplateOutlet } from '@angular/common';
+import {
+    Component,
+    HostListener,
+    inject,
+    input,
+    OnChanges,
+    output,
+    SimpleChanges,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MatCheckboxChange, MatCheckboxModule } from '@angular/material/checkbox';
+import {
+    MatCheckboxChange,
+    MatCheckboxModule,
+} from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
+import {
+    MatSlideToggle,
+    MatSlideToggleChange,
+} from '@angular/material/slide-toggle';
 import { MatInput } from '@angular/material/input';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
-import { MatOption, MatSelect, MatSelectChange } from '@angular/material/select';
+import {
+    MatOption,
+    MatSelect,
+    MatSelectChange,
+} from '@angular/material/select';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 
 import { filter, tap } from 'rxjs';
@@ -67,8 +86,11 @@ const USER_SETTINGS_KEY = 'userOptions.v1';
     templateUrl: './monitor.component.html',
     styleUrls: ['./monitor.component.scss'],
     imports: [
-        CommonModule,
+        FormsModule,
+
+        NgClass,
         NgTemplateOutlet,
+
         MatTableModule,
         MatButtonModule,
         MatIcon,
@@ -81,7 +103,8 @@ const USER_SETTINGS_KEY = 'userOptions.v1';
         MatMenu,
         MatLabel,
         MatOption,
-        FormsModule,
+        MatSlideToggle,
+
         FormatSizePipe,
         FormatDeltaPipe,
     ],
@@ -251,6 +274,14 @@ export class MonitorComponent implements OnChanges {
 
         if (canvas) {
             this.viewFeatures.emit(canvas);
+        }
+    }
+
+    onThemeToggle(event: MatSlideToggleChange) {
+        if (event.checked) {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
         }
     }
 

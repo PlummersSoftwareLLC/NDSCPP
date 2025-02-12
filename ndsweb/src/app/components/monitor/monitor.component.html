@@ -21,15 +21,21 @@
             [(ngModel)]="displayedColumns"
             (selectionChange)="displayedColumnsSelectionChange($event)"
         >
-            <mat-option *ngFor="let column of columns" [value]="column.value">
+            @for(column of columns; track column){
+            <mat-option [value]="column.value">
                 {{ column.key }}
             </mat-option>
+            }
         </mat-select>
         <mat-label> Display Columns </mat-label>
     </mat-form-field>
     <button mat-raised-button (click)="openReorderColumnsDialog()">
         Reorder Columns
     </button>
+<div class="spacer">&nbsp;</div>
+    <mat-slide-toggle [checked]="true" (change)="onThemeToggle($event)"
+        >Dark mode</mat-slide-toggle
+    >
 </div>
 <table mat-table [dataSource]="dataSource" [trackBy]="trackByFn">
     <ng-container matColumnDef="select">
@@ -56,13 +62,11 @@
                     [indeterminate]="areAnySelected()"
                 >
                 </mat-checkbox>
-                <button
-                    *ngIf="selection.hasValue()"
-                    mat-icon-button
-                    [matMenuTriggerFor]="actions"
-                >
+                @if(selection.hasValue()){
+                <button mat-icon-button [matMenuTriggerFor]="actions">
                     <mat-icon>more_vert</mat-icon>
                 </button>
+                }
             </div>
         </th>
         <td mat-cell *matCellDef="let element">
@@ -153,11 +157,8 @@
     <ng-container matColumnDef="queueDepth">
         <th mat-header-cell *matHeaderCellDef>Queue</th>
         <td mat-cell *matCellDef="let element">
+            @if(element.isConnected && element.queueDepth !== null){
             <ng-container
-                *ngIf="
-                    element.isConnected && element.queueDepth !== null;
-                    else empty
-                "
                 [ngTemplateOutlet]="queue"
                 [ngTemplateOutletContext]="{
                     $implicit: {
@@ -168,6 +169,10 @@
                 }"
             >
             </ng-container>
+
+            }@else {
+            <ng-container [ngTemplateOutlet]="empty"> </ng-container>
+            }
         </td>
     </ng-container>
     <ng-container matColumnDef="buffer">
@@ -198,19 +203,22 @@
     <ng-container matColumnDef="dataRate">
         <th mat-header-cell *matHeaderCellDef>Data</th>
         <td mat-cell *matCellDef="let element">
-            <ng-container *ngIf="element.isConnected; else empty">
-                {{ element.bandwidth | formatSize }}/s</ng-container
-            >
+            @if(element.isConnected){
+            {{ element.bandwidth | formatSize }}/s }@else {
+            <ng-container [ngTemplateOutlet]="empty"> </ng-container>
+            }
         </td>
     </ng-container>
     <ng-container matColumnDef="delta">
         <th mat-header-cell *matHeaderCellDef>Delta</th>
         <td mat-cell *matCellDef="let element">
-            <ng-container *ngIf="element.isConnected; else empty">
-                <span class="delta" [ngClass]="element.deltaStatus">{{
-                    element.delta | formatDelta
-                }}</span>
-            </ng-container>
+            @if(element.isConnected){
+            <span class="delta" [ngClass]="element.deltaStatus">{{
+                element.delta | formatDelta
+            }}</span>
+            }@else {
+            <ng-container [ngTemplateOutlet]="empty"> </ng-container>
+            }
         </td>
     </ng-container>
     <ng-container matColumnDef="flash">
@@ -251,16 +259,10 @@
         <th mat-header-cell *matHeaderCellDef>Actions</th>
         <td mat-cell *matCellDef="let data">
             <mat-menu #parentMenu="matMenu">
-                <button
-                    mat-menu-item
-                    (click)="onStartCanvases([data.id])"
-                >
+                <button mat-menu-item (click)="onStartCanvases([data.id])">
                     Start
                 </button>
-                <button
-                    mat-menu-item
-                    (click)="onStopCanvases([data.id])"
-                >
+                <button mat-menu-item (click)="onStopCanvases([data.id])">
                     Stop
                 </button>
                 <button mat-menu-item (click)="onDeleteCanvas(data)">
@@ -288,17 +290,19 @@
 </table>
 
 <ng-template #compare let-data>
-    <ng-container *ngIf="data.isConnected; else empty">
-        <span [ngClass]="data.status">{{ data.first }}</span>
-        /
-        <span>{{ data.second }}</span>
-    </ng-container>
+    @if(data.isConnected){
+    <span [ngClass]="data.status">{{ data.first }}</span>
+    /
+    <span>{{ data.second }}</span>
+    }@else {
+    <ng-container [ngTemplateOutlet]="empty"> </ng-container>
+    }
 </ng-template>
 
 <ng-template #queue let-data>
-    <span *ngIf="data.value > QUEUE_MAX_SIZE" class="display-value"
-        >{{ data.value }}
-    </span>
+    @if(data.value > QUEUE_MAX_SIZE){
+    <span class="display-value">{{ data.value }}</span>
+    }
     <progress
         [ngClass]="data.status"
         [value]="data.value"
@@ -308,9 +312,11 @@
 
 <ng-template #sort let-column>
     <button mat-button (click)="onSort(column.key)">
-        <mat-icon *ngIf="column.key === sortColumn">{{
+        @if(column.key === sortColumn){
+        <mat-icon>{{
             sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'
         }}</mat-icon>
+        }
         {{ column.name }}
     </button>
 </ng-template>

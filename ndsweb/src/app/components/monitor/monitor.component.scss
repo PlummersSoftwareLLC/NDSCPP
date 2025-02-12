@@ -23,6 +23,11 @@ table {
     padding-top: 10px;
     gap: 10px;
     display: flex;
+    align-items: baseline;
+
+    .spacer {
+        flex: 1 1;
+    }
 }
 
 .good {
