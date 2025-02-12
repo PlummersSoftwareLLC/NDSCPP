@@ -149,7 +149,7 @@ inline void to_json(nlohmann::json& j, const std::shared_ptr<ICanvas>& canvasPtr
 
 inline void from_json(const nlohmann::json& j, shared_ptr<ICanvas> & canvas) 
 {
-    // Create canvas with required fields. We pull the FPS from the embedded EffectsManager JSON if we have it.
+    // Create canvas with required fields.
     canvas = std::make_shared<Canvas>(
         j.at("name").get<std::string>(),
         j.at("width").get<uint32_t>(),
