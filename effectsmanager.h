@@ -31,7 +31,7 @@ class EffectsManager : public IEffectsManager
     thread        _workerThread;
 
 public:
-    EffectsManager(uint16_t fps = 30) : _fps(fps), _currentEffectIndex(-1), _wantsToRun(true), _running(false) // No effect selected initially
+    EffectsManager(uint16_t fps) : _fps(fps), _currentEffectIndex(-1), _wantsToRun(true), _running(false) // No effect selected initially
     {
     }
 
@@ -257,9 +257,6 @@ private:
     {
         return _currentEffectIndex >= 0 && _currentEffectIndex < static_cast<int>(_effects.size());
     }
-
-    friend void to_json(nlohmann::json &j, const EffectsManager &manager);
-    friend void from_json(const nlohmann::json &j, EffectsManager &manager);
 };
 
 // Define type aliases for effect (de)serialization functions for legibility reasons
