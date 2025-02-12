@@ -12,6 +12,11 @@ table {
             padding: 20px;
         }
     }
+
+    th.mat-column-select .select {
+        display: flex;
+        align-items: center;
+    }
 }
 
 .filters {
@@ -54,6 +59,9 @@ progress.danger::-webkit-progress-value {
     background-color: #ff0000;
 }
 
+.mat-column-select {
+    width: 96px;
+}
 .mat-column-canvasName {
     width: 100px;
 }
@@ -72,7 +80,6 @@ progress.danger::-webkit-progress-value {
 .mat-column-fps {
     width: 60px;
 }
-
 .mat-column-queueDepth {
     position: relative;
 
@@ -101,7 +108,6 @@ progress.danger::-webkit-progress-value {
 .mat-column-flash {
     width: 50px;
 }
-
 .mat-column-status {
     width: 70px;
     text-transform: uppercase;
@@ -116,4 +122,8 @@ progress.danger::-webkit-progress-value {
 }
 .mat-column-effect {
     width: 160px;
+}
+.mat-column-actions {
+    text-align: right;
+    width: 40px;
 }

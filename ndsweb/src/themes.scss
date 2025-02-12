@@ -1,0 +1,38 @@
+@use '@angular/material' as mat;
+
+@include mat.core();
+
+$mat-confirm: #00b61e;
+$mat-warn: #ba1a1a;
+$mat-white: #fff;
+
+$error-theme: mat.define-theme(
+    (
+        color: (
+            theme-type: light,
+            primary: mat.$red-palette,
+        ),
+    )
+);
+
+mat-icon.warn {
+    @include mat.icon-color($error-theme, $color-variant: error);
+}
+
+button.warn {
+    @include mat.button-overrides(
+        (
+            protected-container-color: $mat-warn,
+            protected-label-text-color: $mat-white,
+        )
+    );
+}
+
+button.confirm {
+    @include mat.button-overrides(
+        (
+            protected-container-color: $mat-confirm,
+            protected-label-text-color: $mat-white,
+        )
+    );
+}

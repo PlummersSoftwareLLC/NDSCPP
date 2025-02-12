@@ -1,18 +1,3 @@
-@use '@angular/material' as mat;
-
-@include mat.core();
-
-$mat-warn: #f44336;
-
-$error-theme: mat.define-theme(
-    (
-        color: (
-            theme-type: light,
-            primary: mat.$red-palette,
-        ),
-    )
-);
-
 :host {
     display: block;
     padding: 60px;
@@ -23,5 +8,5 @@ $error-theme: mat.define-theme(
 
     .mat-icon {
         vertical-align: bottom;
-        @include mat.icon-color($error-theme, $color-variant: error);
-    }}
+    }
+}

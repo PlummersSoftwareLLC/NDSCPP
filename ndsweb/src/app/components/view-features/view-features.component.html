@@ -1,0 +1,8 @@
+<mat-list>
+    <mat-list-item *ngFor="let feature of features">
+        <span matListItemTitle>{{ feature.friendlyName }}</span>
+        <button matListItemMeta mat-icon-button (click)="onDeleteFeature(feature)">
+            <mat-icon class="warn">delete</mat-icon>
+        </button>
+    </mat-list-item>
+</mat-list>

@@ -27,7 +27,7 @@ To run the dev server for your app, use:
 npx nx serve monitor-web
 ```
 
-After the application builds successfully, you should see an output simular to this:
+After the application builds successfully, you should see an output similar to this:
 
 ![Successful compile](readme-compile.png)
 

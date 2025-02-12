@@ -1,12 +1,36 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
+import { APP_SERVER_URL } from '../tokens';
 
 @Injectable()
 export class MonitorService {
-    constructor(private http: HttpClient) {}
+    serverUrl = inject(APP_SERVER_URL);
+    http = inject(HttpClient);
 
     getCanvases() {
-        return this.http.get<Canvas[]>('http://localhost:7777/api/canvases');
+        return this.http.get<Canvas[]>(`${this.serverUrl}/canvases`);
+    }
+
+    deleteCanvas(canvasId: number) {
+        return this.http.delete(`${this.serverUrl}/canvases/${canvasId}`)
+    }
+
+    deleteFeature(canvasId: number, featureId: number) {
+        return this.http.delete(`${this.serverUrl}/canvases/${canvasId}/features/${featureId}`)
+    }
+
+    startCanvases(canvases: Canvas[]) {
+        const canvasIds = canvases.map((c) => c.id);
+        return this.http.post(`${this.serverUrl}/canvases/start`, {
+            canvasIds,
+        });
+    }
+
+    stopCanvases(canvases: Canvas[]) {
+        const canvasIds = canvases.map((c) => c.id);
+        return this.http.post(`${this.serverUrl}/canvases/stop`, {
+            canvasIds,
+        });
     }
 }
 
