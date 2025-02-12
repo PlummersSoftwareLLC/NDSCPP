@@ -1,5 +1,5 @@
 export const environment = {
-    production: false,
+    production: true,
 
     buildVersion: '{{ BUILD_VERSION }}',
     buildDate: '{{ BUILD_DATE }}',
