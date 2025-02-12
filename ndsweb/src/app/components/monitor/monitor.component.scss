@@ -23,6 +23,15 @@ table {
     padding-top: 10px;
     gap: 10px;
     display: flex;
+    align-items: baseline;
+
+    .spacer {
+        flex: 1 1;
+    }
+
+    mat-slide-toggle {
+        justify-self: flex-end;
+    }
 }
 
 .good {

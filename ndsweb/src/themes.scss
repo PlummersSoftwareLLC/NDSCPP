@@ -2,6 +2,32 @@
 
 @include mat.core();
 
+html {
+    height: 100%;
+
+    @include mat.theme(
+        (
+            color: (
+                primary: mat.$cyan-palette,
+                tertiary: mat.$orange-palette,
+            ),
+            typography: Roboto,
+            density: 0,
+        )
+    );
+}
+
+body {
+    height: 100%;
+    color: var(--mat-sys-on-surface);
+    background: var(--mat-sys-surface);
+    color-scheme: light;
+
+    &.dark-mode {
+        color-scheme: dark;
+    }
+}
+
 $mat-confirm: #00b61e;
 $mat-warn: #ba1a1a;
 $mat-white: #fff;
