@@ -134,7 +134,6 @@ inline void to_json(nlohmann::json& j, const ICanvas& canvas)
         {"id",                canvas.Id()},
         {"width",             canvas.Graphics().Width()},
         {"height",            canvas.Graphics().Height()},
-        {"fps",               canvas.Effects().GetFPS()},
         {"currentEffectName", canvas.Effects().CurrentEffectName()},
         {"features",          jsonFeatures}, // Serialized feature data
         {"effectsManager",    canvas.Effects()}    // EffectsManager must have a `to_json`
@@ -143,23 +142,18 @@ inline void to_json(nlohmann::json& j, const ICanvas& canvas)
 
 inline void to_json(nlohmann::json& j, const std::shared_ptr<ICanvas>& canvasPtr) 
 {
-    if (canvasPtr) {
-        j = *canvasPtr; // Use the `to_json` function for ICanvas
-    } else {
-        j = nullptr; // Handle null pointers gracefully
-    }
+    j = canvasPtr ? nlohmann::json(*canvasPtr) : nullptr;
 }
 
 // ICanvas <-- JSON
 
 inline void from_json(const nlohmann::json& j, shared_ptr<ICanvas> & canvas) 
 {
-    // Create canvas with required fields
+    // Create canvas with required fields.
     canvas = std::make_shared<Canvas>(
         j.at("name").get<std::string>(),
         j.at("width").get<uint32_t>(),
-        j.at("height").get<uint32_t>(),
-        j.value("fps", 30u) // Default FPS to 30 if not provided
+        j.at("height").get<uint32_t>()
     );
 
     // Features()

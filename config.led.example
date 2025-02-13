@@ -29,7 +29,6 @@
             "width": 64
           }
         ],
-        "fps": 24,
         "height": 32,
         "id": 0,
         "name": "Mesmerizer",
@@ -64,7 +63,6 @@
             "width": 512
           }
         ],
-        "fps": 24,
         "height": 32,
         "id": 1,
         "name": "Banner",
@@ -103,7 +101,6 @@
             "width": 100
           }
         ],
-        "fps": 3,
         "height": 1,
         "id": 2,
         "name": "Window1",
@@ -142,7 +139,6 @@
             "width": 100
           }
         ],
-        "fps": 3,
         "height": 1,
         "id": 3,
         "name": "Window2",
@@ -181,7 +177,6 @@
             "width": 100
           }
         ],
-        "fps": 3,
         "height": 1,
         "id": 4,
         "name": "Window3",
@@ -310,7 +305,6 @@
             "width": 144
           }
         ],
-        "fps": 20,
         "height": 1,
         "id": 5,
         "name": "Cabinets",
@@ -419,7 +413,6 @@
             "width": 1129
           }
         ],
-        "fps": 24,
         "height": 1,
         "id": 6,
         "name": "Cabana",
@@ -457,7 +450,6 @@
             "width": 758
           }
         ],
-        "fps": 30,
         "height": 1,
         "id": 7,
         "name": "Ceiling",
@@ -544,7 +536,6 @@
             "width": 32
           }
         ],
-        "fps": 30,
         "height": 1,
         "id": 8,
         "name": "Tree",
