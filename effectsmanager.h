@@ -324,6 +324,12 @@ inline void from_json(const nlohmann::json &j, shared_ptr<ILEDEffect> & effect)
     }
 
     effect = it->second.second(j);
+
+    // Deserialize schedule if present
+    if (j.contains("schedule")) {
+        Schedule schedule = j["schedule"].get<Schedule>();
+        effect->SetSchedule(schedule);
+    }
 }
 
 // IEffectsManager <-- JSON

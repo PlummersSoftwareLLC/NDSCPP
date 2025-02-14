@@ -28,6 +28,7 @@
 #include "ledfeature.h"
 #include "webserver.h"
 #include "controller.h"
+#include "schedule.h"
 
 
 using namespace std;

@@ -44,11 +44,52 @@ public:
     virtual void DrawRectangle(uint32_t x, uint32_t y, uint32_t width, uint32_t height, const CRGB& color) = 0;
 };
 
-// ILEDFeature
+// ISchedule Interface
 //
-// Represents a 2D collection of LEDs with positioning, rendering, and configuration capabilities.  
-// Provides APIs for interacting with its parent canvas and retrieving its assigned color data.
+// Represents a class that determine whether the effect involved can/should be run at the current time
 
+class ISchedule 
+{
+public:
+
+    // Days of week as a bitmask using powers of 2.
+
+    enum DayOfWeek : uint8_t 
+    {
+        Sunday    = 0x01,  // 1
+        Monday    = 0x02,  // 2
+        Tuesday   = 0x04,  // 4
+        Wednesday = 0x08,  // 8
+        Thursday  = 0x10,  // 16
+        Friday    = 0x20,  // 32
+        Saturday  = 0x40   // 64
+    };
+
+    virtual ~ISchedule() = default;
+
+    // Setters for optional schedule properties.
+    virtual void SetDaysOfWeek(uint8_t days) = 0;
+    virtual void SetStartTime(const std::string& time) = 0;   // Format: "HH:MM:SS"
+    virtual void SetStopTime(const std::string& time) = 0;    // Format: "HH:MM:SS"
+    virtual void SetStartDate(const std::string& date) = 0;   // Format: "YYYY-MM-DD"
+    virtual void SetStopDate(const std::string& date) = 0;    // Format: "YYYY-MM-DD"
+
+    // Getters for schedule properties.
+    virtual std::optional<uint8_t>     GetDaysOfWeek() const = 0;
+    virtual std::optional<std::string> GetStartTime() const = 0;
+    virtual std::optional<std::string> GetStopTime() const = 0;
+    virtual std::optional<std::string> GetStartDate() const = 0;
+    virtual std::optional<std::string> GetStopDate() const = 0;
+
+    // Methods to manipulate individual days.
+    virtual void AddDay(DayOfWeek day) = 0;
+    virtual void RemoveDay(DayOfWeek day) = 0;
+    virtual bool HasDay(DayOfWeek day) const = 0;
+
+    // Determines if the schedule is currently active.
+    // Optional fields (days, start/stop times, start/stop dates) are considered a match if not present.
+    virtual bool IsActive() const = 0;
+};
 
 struct ClientResponse;
 class ICanvas;
@@ -56,7 +97,6 @@ class ICanvas;
 // ILEDEffect
 //
 // Defines lifecycle hooks (`Start` and `Update`) for applying visual effects on LED canvases.  
-
 
 class ILEDEffect
 {
@@ -71,6 +111,9 @@ public:
 
     // Called to update the effect, given a canvas and timestamp
     virtual void Update(ICanvas& canvas, milliseconds deltaTime) = 0;
+
+    virtual void SetSchedule(const ISchedule & pSchedule) = 0;
+    virtual ISchedule * GetSchedule() = 0;
 };
 
 // IEffectsManager
@@ -140,6 +183,10 @@ public:
     virtual void Stop() = 0;
 };
 
+// ILEDFeature
+//
+// Represents a 2D collection of LEDs with positioning, rendering, and configuration capabilities.  
+// Provides APIs for interacting with its parent canvas and retrieving its assigned color data.
 
 class ILEDFeature 
 {
