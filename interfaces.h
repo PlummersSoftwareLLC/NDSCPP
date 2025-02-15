@@ -113,7 +113,7 @@ public:
     virtual void Update(ICanvas& canvas, milliseconds deltaTime) = 0;
 
     virtual void SetSchedule(const ISchedule & pSchedule) = 0;
-    virtual ISchedule * GetSchedule() = 0;
+    virtual const ISchedule * GetSchedule() = 0;
 };
 
 // IEffectsManager

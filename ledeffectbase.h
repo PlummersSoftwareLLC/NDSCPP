@@ -36,7 +36,7 @@ public:
         _ptrSchedule = std::make_unique<Schedule>(static_cast<const Schedule &>(schedule));
     }
 
-    ISchedule * GetSchedule() override
+    const ISchedule * GetSchedule() override
     {
         return _ptrSchedule.get();
     }
