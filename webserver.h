@@ -296,6 +296,36 @@ public:
                     }
                 });
 
+        // Add effect to canvas
+        CROW_ROUTE(_crowApp, "/api/canvases/<int>/effects")
+            .methods(crow::HTTPMethod::POST)([&](const crow::request& req, int canvasId) -> crow::response
+            {
+                try 
+                {
+                    auto reqJson = nlohmann::json::parse(req.body);
+                    auto effect = reqJson.get<shared_ptr<ILEDEffect>>();
+
+                    unique_lock writeLock(_apiMutex);
+                    auto canvas = _controller.GetCanvasById(canvasId);
+                    
+                    // Get current effects
+                    auto& effectsManager = canvas->Effects();
+                    
+                    // Add the new effect
+                    effectsManager.AddEffect(effect);
+                    
+                    PersistController(req);
+                    writeLock.unlock();
+
+                    return crow::response(crow::OK);
+                } 
+                catch (const exception& e) 
+                {
+                    logger->error("Error adding effect to canvas {}: {}", canvasId, e.what());
+                    return crow::response(crow::BAD_REQUEST, string("Error: ") + e.what());
+                }
+            });
+
         // Start the server
         _crowApp.port(_controller.GetPort()).multithreaded().run();
     }
