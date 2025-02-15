@@ -530,9 +530,9 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
     const auto& effectsManager = canvasWithEffects["effectsManager"];
     ASSERT_TRUE(effectsManager.contains("effects"));
     const auto& effects = effectsManager["effects"];
-    ASSERT_EQ(effects.size(), (size_t) 2);  // We should at least have 2 effects
+    ASSERT_EQ(effects.size(), (size_t) 2);
 
-    // For now, just verify the basic structure until we fix the deserialization
+    // Verify basic structure and schedule
     for (const auto& effect : effects) {
         ASSERT_TRUE(effect.contains("type"));
         ASSERT_TRUE(effect.contains("name"));
@@ -540,6 +540,16 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
         ASSERT_TRUE(effect["color"].contains("r"));
         ASSERT_TRUE(effect["color"].contains("g"));
         ASSERT_TRUE(effect["color"].contains("b"));
+
+        // If this is the first effect (with schedule)
+        if (effect.contains("schedule")) {
+            ASSERT_TRUE(effect["schedule"].contains("daysOfWeek"));
+            ASSERT_EQ(effect["schedule"]["daysOfWeek"], 0x3E);
+            ASSERT_TRUE(effect["schedule"].contains("startTime"));
+            ASSERT_EQ(effect["schedule"]["startTime"], "09:00:00");
+            ASSERT_TRUE(effect["schedule"].contains("stopTime"));
+            ASSERT_EQ(effect["schedule"]["stopTime"], "17:00:00");
+        }
     }
 
     // Clean up
