@@ -236,7 +236,7 @@ TEST_F(APITest, MultipleCanvasOperations)
     std::vector<std::future<cpr::Response>> createFutures;
     for (int i = 0; i < NUM_CANVASES; i++)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(stddelay)); // Small delay
+        std::this_thread::sleep_for(milliseconds(stddelay)); // Small delay
 
         createFutures.push_back(std::async(std::launch::async, [i]()
         {
@@ -314,7 +314,7 @@ TEST_F(APITest, MultipleFeatureOperations)
     std::vector<std::future<cpr::Response>> featureFutures;
     for (int i = 0; i < NUM_FEATURES; i++)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(stddelay)); // Small delay
+        std::this_thread::sleep_for(milliseconds(stddelay)); // Small delay
 
         featureFutures.push_back(std::async(std::launch::async, [i, canvasId]()
         {
@@ -384,7 +384,7 @@ TEST_F(APITest, RapidCreationDeletion)
         // Create canvases
         for (int i = 0; i < NUM_CANVASES_PER_CYCLE; i++)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(stddelay)); // Small delay
+            std::this_thread::sleep_for(milliseconds(stddelay)); // Small delay
 
             json canvasData = {
                 {"id", -1},
@@ -424,7 +424,7 @@ TEST_F(APITest, RapidCreationDeletion)
         // Delete all canvases in this cycle
         for (int id : cycleCanvasIds)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(stddelay)); // Small delay
+            std::this_thread::sleep_for(milliseconds(stddelay)); // Small delay
 
             auto response = cpr::Delete(cpr::Url{BASE_URL + "/canvases/" + std::to_string(id)},
                                         noPersistParam);

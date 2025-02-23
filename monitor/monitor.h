@@ -211,12 +211,12 @@ public:
         nodelay(contentWin, TRUE);
         
         bool running = true;
-        auto lastUpdate = std::chrono::steady_clock::now();
+        auto lastUpdate = steady_clock::now();
         
         while (running)
         {
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate);
+            auto now = steady_clock::now();
+            auto elapsed = duration_cast<milliseconds>(now - lastUpdate);
             
             // Update display every 100ms
             if (elapsed.count() >= 100) {
@@ -243,13 +243,13 @@ public:
                         break;
                     case 'r':
                     case 'R':
-                        lastUpdate = std::chrono::steady_clock::time_point::min(); // Force immediate refresh
+                        lastUpdate = steady_clock::time_point::min(); // Force immediate refresh
                         break;
                 }
             }
             
             // Small sleep to prevent CPU spinning
-            std::this_thread::sleep_for(std::chrono::milliseconds(_fps > 0 ? static_cast<int>(1000.0 / _fps) : 100));
+            std::this_thread::sleep_for(milliseconds(_fps > 0 ? static_cast<int>(1000.0 / _fps) : 100));
         }
     }
 };
