@@ -7,7 +7,6 @@
 #include <string>
 #include <unistd.h> // for getopt
 #include <cstdlib>  // for exit
-
 #include "monitor.h"
 
 using json = nlohmann::json;

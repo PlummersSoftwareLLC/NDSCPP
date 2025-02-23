@@ -3,6 +3,9 @@
 #include <../json.hpp>
 
 using json = nlohmann::json;
+using namespace std;
+using namespace std::chrono;
+
 const std::string BASE_URL = "http://localhost:7777/api";
 
 const int stddelay = 5;

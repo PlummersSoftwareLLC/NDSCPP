@@ -11,6 +11,8 @@
 #include <../json.hpp>
 
 using json = nlohmann::json;
+using namespace std;
+using namespace std::chrono;
 
 // Updated columns with new information
 extern const std::vector<std::pair<std::string, int>> COLUMNS;
