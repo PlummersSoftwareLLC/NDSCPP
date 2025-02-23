@@ -12,7 +12,7 @@ class LEDEffectBase : public ILEDEffect
 {
 protected:
     string _name;
-    unique_ptr<ISchedule> _ptrSchedule = nullptr;
+    unique_ptr<reference_wrapper<const ISchedule>> _ptrSchedule = nullptr;
 
 public:
     LEDEffectBase(const string& name) : _name(name) {}
@@ -33,12 +33,12 @@ public:
 
     void SetSchedule(const ISchedule & schedule) override
     {
-        _ptrSchedule = std::make_unique<Schedule>(static_cast<const Schedule &>(schedule));
+        _ptrSchedule = make_unique<reference_wrapper<const ISchedule>>(schedule);
     }
 
     const ISchedule * GetSchedule() override
     {
-        return _ptrSchedule.get();
+        return &_ptrSchedule->get();
     }
 };
 
