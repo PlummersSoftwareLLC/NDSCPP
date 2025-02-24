@@ -554,6 +554,9 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
             ASSERT_TRUE(effect["schedule"].contains("stopTime"));
             ASSERT_EQ(effect["schedule"]["stopTime"], "17:00:00");
         }
+        else {
+            ASSERT_FALSE(effect.contains("schedule"));
+        }
     }
 
     // Clean up
