@@ -21,17 +21,17 @@ public:
 
     // Setters
     void SetDaysOfWeek(uint8_t days) override { daysOfWeek = days; } 
-    void SetStartTime(const std::string& time) override { startTime = time; }
-    void SetStopTime(const std::string& time) override { stopTime = time; }
-    void SetStartDate(const std::string& date) override { startDate = date; }
-    void SetStopDate(const std::string& date) override { stopDate = date; }
+    void SetStartTime(const string& time) override { startTime = time; }
+    void SetStopTime(const string& time) override { stopTime = time; }
+    void SetStartDate(const string& date) override { startDate = date; }
+    void SetStopDate(const string& date) override { stopDate = date; }
 
     // Getters
-    std::optional<uint8_t>     GetDaysOfWeek()  const override { return daysOfWeek; }
-    std::optional<std::string> GetStartTime()   const override { return startTime; }
-    std::optional<std::string> GetStopTime()    const override { return stopTime; }
-    std::optional<std::string> GetStartDate()   const override { return startDate; }
-    std::optional<std::string> GetStopDate()    const override { return stopDate; }
+    optional<uint8_t> GetDaysOfWeek()  const override { return daysOfWeek; }
+    optional<string>  GetStartTime()   const override { return startTime; }
+    optional<string>  GetStopTime()    const override { return stopTime; }
+    optional<string>  GetStartDate()   const override { return startDate; }
+    optional<string>  GetStopDate()    const override { return stopDate; }
 
 
     // Methods to manipulate individual days.
@@ -61,8 +61,8 @@ public:
     {
         // Get current time in system local time
         auto now = system_clock::now();
-        std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-        std::tm *localTime = std::localtime(&now_c);
+        time_t now_c = chrono::system_clock::to_time_t(now);
+        tm *localTime = localtime(&now_c);
 
         // Check day-of-week: if daysOfWeek is set, today's bit must be on.
         // Note: localTime->tm_wday: Sunday == 0, Monday == 1, etc.
@@ -74,11 +74,11 @@ public:
         }
 
         // Format current date and time as strings in "YYYY-MM-DD" and "HH:MM:SS" formats.
-        std::ostringstream dateStream, timeStream;
-        dateStream << std::put_time(localTime, "%Y-%m-%d");
-        timeStream << std::put_time(localTime, "%H:%M:%S");
-        std::string currentDate = dateStream.str();
-        std::string currentTime = timeStream.str();
+        ostringstream dateStream, timeStream;
+        dateStream << put_time(localTime, "%Y-%m-%d");
+        timeStream << put_time(localTime, "%H:%M:%S");
+        string currentDate = dateStream.str();
+        string currentTime = timeStream.str();
 
         // Check start and stop dates if set.
         if (startDate.has_value() && currentDate < startDate.value()) {
@@ -100,17 +100,17 @@ public:
     }
 
 private:
-    std::optional<uint8_t>     daysOfWeek;  // Bitmask for days of week
-    std::optional<std::string> startTime;   // Format: "HH:MM:SS"
-    std::optional<std::string> stopTime;    // Format: "HH:MM:SS"
-    std::optional<std::string> startDate;   // Format: "YYYY-MM-DD"
-    std::optional<std::string> stopDate;    // Format: "YYYY-MM-DD"
+    optional<uint8_t> daysOfWeek;  // Bitmask for days of week
+    optional<string>  startTime;   // Format: "HH:MM:SS"
+    optional<string>  stopTime;    // Format: "HH:MM:SS"
+    optional<string>  startDate;   // Format: "YYYY-MM-DD"
+    optional<string>  stopDate;    // Format: "YYYY-MM-DD"
 };
 
 
 // Global to_json and from_json functions for Schedule.
 // Only properties that are set will be serialized.
-inline void to_json(nlohmann::json &j, const Schedule &s) 
+inline void to_json(nlohmann::json &j, const ISchedule &s) 
 {
     if (s.GetDaysOfWeek().has_value()) {
         j["daysOfWeek"] = s.GetDaysOfWeek().value();
@@ -129,21 +129,23 @@ inline void to_json(nlohmann::json &j, const Schedule &s)
     }
 }
 
-inline void from_json(const nlohmann::json &j, Schedule &s) 
+inline void from_json(const nlohmann::json &j, shared_ptr<ISchedule> &s) 
 {
+    s = make_shared<Schedule>();
+
     if (j.contains("daysOfWeek")) {
-        s.SetDaysOfWeek(j.at("daysOfWeek").get<uint8_t>());
+        s->SetDaysOfWeek(j.at("daysOfWeek").get<uint8_t>());
     }
     if (j.contains("startTime")) {
-        s.SetStartTime(j.at("startTime").get<std::string>());
+        s->SetStartTime(j.at("startTime").get<string>());
     }
     if (j.contains("stopTime")) {
-        s.SetStopTime(j.at("stopTime").get<std::string>());
+        s->SetStopTime(j.at("stopTime").get<string>());
     }
     if (j.contains("startDate")) {
-        s.SetStartDate(j.at("startDate").get<std::string>());
+        s->SetStartDate(j.at("startDate").get<string>());
     }
     if (j.contains("stopDate")) {
-        s.SetStopDate(j.at("stopDate").get<std::string>());
+        s->SetStopDate(j.at("stopDate").get<string>());
     }
 }

@@ -545,7 +545,8 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
         ASSERT_TRUE(effect["color"].contains("b"));
 
         // If this is the first effect (with schedule)
-        if (effect.contains("schedule")) {
+        if (effect["name"] == "Test Effect 1") {
+            ASSERT_TRUE(effect.contains("schedule"));
             ASSERT_TRUE(effect["schedule"].contains("daysOfWeek"));
             ASSERT_EQ(effect["schedule"]["daysOfWeek"], 0x3E);
             ASSERT_TRUE(effect["schedule"].contains("startTime"));

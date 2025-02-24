@@ -1,6 +1,6 @@
 #pragma once
 using namespace std;
-using namespace std::chrono;
+using namespace chrono;
 
 #include "json.hpp"
 
@@ -215,9 +215,9 @@ inline void to_json(nlohmann::json& j, const ILEDFeature & feature)
 inline void from_json(const nlohmann::json& j, shared_ptr<ILEDFeature> & feature) 
 {
     // Use `at` for all fields since they are mandatory
-    feature = std::make_shared<LEDFeature>(
-        j.at("hostName").get<std::string>(),
-        j.at("friendlyName").get<std::string>(),
+    feature = make_shared<LEDFeature>(
+        j.at("hostName").get<string>(),
+        j.at("friendlyName").get<string>(),
         j.at("port").get<uint16_t>(),
         j.at("width").get<uint32_t>(),
         j.at("height").get<uint32_t>(),

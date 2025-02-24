@@ -89,7 +89,7 @@ public:
                     shared_lock readLock(_apiMutex);
                     return nlohmann::json{{"controller", _controller}}.dump();
                 }
-                catch(const std::exception& e)
+                catch(const exception& e)
                 {
                     logger->error("Error in /api/controller: {}", e.what());
                     return {crow::BAD_REQUEST, string("Error: ") + e.what()};
@@ -106,7 +106,7 @@ public:
                     shared_lock readLock(_apiMutex);
                     return nlohmann::json{{"sockets", _controller.GetSockets()}}.dump();
                 }
-                catch(const std::exception& e)
+                catch(const exception& e)
                 {
                     logger->error("Error in /api/sockets: {}", e.what());
                     return {crow::BAD_REQUEST, string("Error: ") + e.what()};
@@ -124,7 +124,7 @@ public:
                     shared_lock readLock(_apiMutex);
                     return nlohmann::json{{"socket", _controller.GetSocketById(socketId)}}.dump();
                 }
-                catch(const std::exception& e)
+                catch(const exception& e)
                 {
                     logger->error("Error in /api/sockets/{}: {}", socketId, e.what());
                     return {crow::BAD_REQUEST, string("Error: ") + e.what()};
@@ -141,7 +141,7 @@ public:
                     shared_lock readLock(_apiMutex);
                     return nlohmann::json(_controller.Canvases()).dump();
                 }
-                catch(const std::exception& e)
+                catch(const exception& e)
                 {
                     logger->error("Error in /api/canvases: {}", e.what());
                     return {crow::BAD_REQUEST, string("Error: ") + e.what()};
@@ -158,7 +158,7 @@ public:
                     shared_lock readLock(_apiMutex);
                     return nlohmann::json(*_controller.GetCanvasById(id)).dump(); 
                 }
-                catch(const std::exception& e)
+                catch(const exception& e)
                 {
                     logger->error("Error in /api/canvases/{}: {}", id, e.what());
                     return {crow::BAD_REQUEST, string("Error: ") + e.what()};
@@ -174,7 +174,7 @@ public:
                     ApplyCanvasesRequest(req, [](shared_ptr<ICanvas> canvas) { canvas->Effects().Start(*canvas); });
                     return crow::response(crow::OK);
                 }
-                catch(const std::exception& e)
+                catch(const exception& e)
                 {
                     logger->error("Error in /api/canvases/start: {}", e.what());
                     return {crow::BAD_REQUEST, string("Error: ") + e.what()};
@@ -189,7 +189,7 @@ public:
                     ApplyCanvasesRequest(req, [](shared_ptr<ICanvas> canvas) { canvas->Effects().Stop(); });
                     return crow::response(crow::OK);
                 }
-                catch(const std::exception& e)
+                catch(const exception& e)
                 {
                     logger->error("Error in /api/canvases/stop: {}", e.what());
                     return {crow::BAD_REQUEST, string("Error: ") + e.what()};
@@ -268,7 +268,7 @@ public:
                         
                         return crow::response(crow::OK);
                     }
-                    catch(const std::exception& e)
+                    catch(const exception& e)
                     {
                         logger->error("Error in /api/canvases/{}/features/{} DELETE: {}", canvasId, featureId, e.what());
                         return crow::response(crow::BAD_REQUEST, string("Error: ") + e.what());
@@ -289,7 +289,7 @@ public:
 
                         return crow::response(crow::OK);
                     }
-                    catch(const std::exception& e)
+                    catch(const exception& e)
                     {
                         logger->error("Error in /api/canvases/{} DELETE: {}", id, e.what());
                         return crow::response(crow::BAD_REQUEST, string("Error: ") + e.what());

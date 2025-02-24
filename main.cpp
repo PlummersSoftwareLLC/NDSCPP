@@ -22,7 +22,7 @@
 #include <getopt.h>
 
 using namespace std;
-using namespace std::chrono;
+using namespace chrono;
 
 #include "crow_all.h"
 #include "global.h"

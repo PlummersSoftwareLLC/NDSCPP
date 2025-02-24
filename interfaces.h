@@ -16,7 +16,7 @@
 #include "json.hpp"
 
 using namespace std;
-using namespace std::chrono;
+using namespace chrono;
 
 // ILEDGraphics 
 //
@@ -69,17 +69,17 @@ public:
 
     // Setters for optional schedule properties.
     virtual void SetDaysOfWeek(uint8_t days) = 0;
-    virtual void SetStartTime(const std::string& time) = 0;   // Format: "HH:MM:SS"
-    virtual void SetStopTime(const std::string& time) = 0;    // Format: "HH:MM:SS"
-    virtual void SetStartDate(const std::string& date) = 0;   // Format: "YYYY-MM-DD"
-    virtual void SetStopDate(const std::string& date) = 0;    // Format: "YYYY-MM-DD"
+    virtual void SetStartTime(const string& time) = 0;   // Format: "HH:MM:SS"
+    virtual void SetStopTime(const string& time) = 0;    // Format: "HH:MM:SS"
+    virtual void SetStartDate(const string& date) = 0;   // Format: "YYYY-MM-DD"
+    virtual void SetStopDate(const string& date) = 0;    // Format: "YYYY-MM-DD"
 
     // Getters for schedule properties.
-    virtual std::optional<uint8_t>     GetDaysOfWeek() const = 0;
-    virtual std::optional<std::string> GetStartTime() const = 0;
-    virtual std::optional<std::string> GetStopTime() const = 0;
-    virtual std::optional<std::string> GetStartDate() const = 0;
-    virtual std::optional<std::string> GetStopDate() const = 0;
+    virtual optional<uint8_t>     GetDaysOfWeek() const = 0;
+    virtual optional<string> GetStartTime() const = 0;
+    virtual optional<string> GetStopTime() const = 0;
+    virtual optional<string> GetStartDate() const = 0;
+    virtual optional<string> GetStopDate() const = 0;
 
     // Methods to manipulate individual days.
     virtual void AddDay(DayOfWeek day) = 0;
@@ -112,8 +112,8 @@ public:
     // Called to update the effect, given a canvas and timestamp
     virtual void Update(ICanvas& canvas, milliseconds deltaTime) = 0;
 
-    virtual void SetSchedule(const ISchedule & pSchedule) = 0;
-    virtual const ISchedule * GetSchedule() = 0;
+    virtual void SetSchedule(const shared_ptr<ISchedule> pSchedule) = 0;
+    virtual const shared_ptr<ISchedule> GetSchedule() const = 0;
 };
 
 // IEffectsManager
