@@ -20,6 +20,10 @@
 #include <chrono>
 #include <thread>
 #include <getopt.h>
+
+using namespace std;
+using namespace chrono;
+
 #include "crow_all.h"
 #include "global.h"
 #include "canvas.h"
@@ -28,9 +32,8 @@
 #include "ledfeature.h"
 #include "webserver.h"
 #include "controller.h"
+#include "schedule.h"
 
-
-using namespace std;
 
 atomic<uint32_t> Canvas::_nextId{0};        // Initialize the static member variable for canvas.h
 atomic<uint32_t> LEDFeature::_nextId{0};    // Initialize the static member variable for ledfeature.h

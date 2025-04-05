@@ -3,6 +3,9 @@
 #include <../json.hpp>
 
 using json = nlohmann::json;
+using namespace std;
+using namespace std::chrono;
+
 const std::string BASE_URL = "http://localhost:7777/api";
 
 const int stddelay = 5;
@@ -236,7 +239,7 @@ TEST_F(APITest, MultipleCanvasOperations)
     std::vector<std::future<cpr::Response>> createFutures;
     for (int i = 0; i < NUM_CANVASES; i++)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(stddelay)); // Small delay
+        std::this_thread::sleep_for(milliseconds(stddelay)); // Small delay
 
         createFutures.push_back(std::async(std::launch::async, [i]()
         {
@@ -314,7 +317,7 @@ TEST_F(APITest, MultipleFeatureOperations)
     std::vector<std::future<cpr::Response>> featureFutures;
     for (int i = 0; i < NUM_FEATURES; i++)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(stddelay)); // Small delay
+        std::this_thread::sleep_for(milliseconds(stddelay)); // Small delay
 
         featureFutures.push_back(std::async(std::launch::async, [i, canvasId]()
         {
@@ -384,7 +387,7 @@ TEST_F(APITest, RapidCreationDeletion)
         // Create canvases
         for (int i = 0; i < NUM_CANVASES_PER_CYCLE; i++)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(stddelay)); // Small delay
+            std::this_thread::sleep_for(milliseconds(stddelay)); // Small delay
 
             json canvasData = {
                 {"id", -1},
@@ -424,11 +427,148 @@ TEST_F(APITest, RapidCreationDeletion)
         // Delete all canvases in this cycle
         for (int id : cycleCanvasIds)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(stddelay)); // Small delay
+            std::this_thread::sleep_for(milliseconds(stddelay)); // Small delay
 
             auto response = cpr::Delete(cpr::Url{BASE_URL + "/canvases/" + std::to_string(id)},
                                         noPersistParam);
             ASSERT_EQ(response.status_code, 200);
         }
     }
+}
+
+TEST_F(APITest, CanvasFeatureEffectWithSchedule)
+{
+    // Create a canvas
+    json canvasData = {
+        {"id", -1},
+        {"name", "Test Canvas " + std::to_string(std::time(nullptr))},
+        {"width", 100},
+        {"height", 100}
+    };
+
+    auto createCanvasResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases"},
+        cpr::Body{canvasData.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(createCanvasResponse.status_code, 201);
+    auto canvasJson = json::parse(createCanvasResponse.text);
+    int canvasId = canvasJson["id"].get<int>();
+
+    // Create a feature
+    json featureData = {
+        {"hostName", "test-host"},
+        {"friendlyName", "Test Feature"},
+        {"port", 1234},
+        {"width", 32},
+        {"height", 16},
+        {"offsetX", 10},
+        {"offsetY", 10},
+        {"reversed", false},
+        {"channel", 1},
+        {"redGreenSwap", false},
+        {"clientBufferCount", 8}
+    };
+
+    auto createFeatureResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/features"},
+        cpr::Body{featureData.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(createFeatureResponse.status_code, 200);
+    auto featureJson = json::parse(createFeatureResponse.text);
+    int featureId = featureJson["id"].get<int>();
+
+    // Create first effect with schedule
+    json effect1Data = {
+        {"type", "SolidColorFill"},
+        {"name", "Test Effect 1"},
+        {"color", {
+            {"red", 255},
+            {"green", 0},
+            {"blue", 0}
+        }},
+        {"schedule", {
+            {"daysOfWeek", 0x3E},  // Monday through Friday
+            {"startTime", "09:00:00"},
+            {"stopTime", "17:00:00"}
+        }}
+    };
+
+    auto createEffect1Response = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/effects"},
+        cpr::Body{effect1Data.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(createEffect1Response.status_code, 200);
+
+    // Create second effect
+    json effect2Data = {
+        {"type", "SolidColorFill"},
+        {"name", "Test Effect 2"},
+        {"color", {
+            {"red", 0},
+            {"green", 0},
+            {"blue", 255}
+        }}
+    };
+
+    auto createEffect2Response = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/effects"},
+        cpr::Body{effect2Data.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(createEffect2Response.status_code, 200);
+
+    // Get the canvas to verify effects
+    auto getCanvasResponse = cpr::Get(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        noPersistParam
+    );
+    ASSERT_EQ(getCanvasResponse.status_code, 200);
+    auto canvasWithEffects = json::parse(getCanvasResponse.text);
+    
+    // Verify effects through effectsManager
+    ASSERT_TRUE(canvasWithEffects.contains("effectsManager"));
+    const auto& effectsManager = canvasWithEffects["effectsManager"];
+    ASSERT_TRUE(effectsManager.contains("effects"));
+    const auto& effects = effectsManager["effects"];
+    ASSERT_EQ(effects.size(), (size_t) 2);
+
+    // Verify basic structure and schedule
+    for (const auto& effect : effects) {
+        ASSERT_TRUE(effect.contains("type"));
+        ASSERT_TRUE(effect.contains("name"));
+        ASSERT_TRUE(effect.contains("color"));
+        ASSERT_TRUE(effect["color"].contains("r"));
+        ASSERT_TRUE(effect["color"].contains("g"));
+        ASSERT_TRUE(effect["color"].contains("b"));
+
+        // If this is the first effect (with schedule)
+        if (effect["name"] == "Test Effect 1") {
+            ASSERT_TRUE(effect.contains("schedule"));
+            ASSERT_TRUE(effect["schedule"].contains("daysOfWeek"));
+            ASSERT_EQ(effect["schedule"]["daysOfWeek"], 0x3E);
+            ASSERT_TRUE(effect["schedule"].contains("startTime"));
+            ASSERT_EQ(effect["schedule"]["startTime"], "09:00:00");
+            ASSERT_TRUE(effect["schedule"].contains("stopTime"));
+            ASSERT_EQ(effect["schedule"]["stopTime"], "17:00:00");
+        }
+        else {
+            ASSERT_FALSE(effect.contains("schedule"));
+        }
+    }
+
+    // Clean up
+    auto deleteFeatureResponse = cpr::Delete(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/features/" + std::to_string(featureId)},
+        noPersistParam
+    );
+    ASSERT_EQ(deleteFeatureResponse.status_code, 200);
+
+    auto deleteCanvasResponse = cpr::Delete(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        noPersistParam
+    );
+    ASSERT_EQ(deleteCanvasResponse.status_code, 200);
 }

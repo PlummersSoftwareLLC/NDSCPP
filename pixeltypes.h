@@ -1235,7 +1235,7 @@ enum EOrder
 
 // Since wave table to use for fast HSV to RGB conversion
 
-constexpr std::array<uint8_t, 256> HSV_SINE_TABLE = 
+constexpr array<uint8_t, 256> HSV_SINE_TABLE = 
 {
     128,131,134,137,140,143,146,149,152,155,158,162,165,167,170,173,
     176,179,182,185,188,190,193,196,198,201,203,206,208,211,213,215,
@@ -1323,7 +1323,7 @@ inline void hsv2rgb_rainbow(const CHSV & hsv, CRGB & rgb, bool fast = false)
 // Standard color sequences for use with Palette class
 namespace StandardPalettes 
 {
-    inline const std::vector<CRGB> Rainbow = 
+    inline const vector<CRGB> Rainbow = 
     {
         CRGB(255, 0, 0),     // Pure Red
         CRGB(255, 80, 0),    // Red-Orange
@@ -1335,7 +1335,7 @@ namespace StandardPalettes
         CRGB(143, 0, 255)    // Violet
     };
 
-    inline const std::vector<CRGB> ChristmasLights = 
+    inline const vector<CRGB> ChristmasLights = 
     {
         CRGB(255, 0, 0),     // Red
         CRGB(0, 255, 0),     // Green
@@ -1343,7 +1343,7 @@ namespace StandardPalettes
         CRGB(128, 0, 128)    // Purple
     };
 
-    inline const std::vector<CRGB> RainbowStripes = 
+    inline const vector<CRGB> RainbowStripes = 
     {
         CRGB::Black,   CRGB::Red,
         CRGB::Black,   CRGB::Orange,   

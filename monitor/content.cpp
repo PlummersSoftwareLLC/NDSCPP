@@ -37,7 +37,7 @@ void Monitor::drawContent()
     {
         std::string response = httpGet(baseUrl + "/api/canvases");
         auto j = json::parse(response);
-        auto currentTime = std::chrono::system_clock::now().time_since_epoch().count() / 1000000.0; // Current time in ms
+        auto currentTime = system_clock::now().time_since_epoch().count() / 1000000.0; // Current time in ms
 
         int row = 0;
         for (const auto &canvasJson : j)

@@ -1,6 +1,6 @@
 #pragma once
 using namespace std;
-using namespace std::chrono;
+using namespace chrono;
 
 #include "effects/colorwaveeffect.h"
 #include "effects/fireworkseffect.h"
@@ -297,7 +297,7 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
 
 inline void to_json(nlohmann::json &j, const ILEDEffect &effect)
 {
-    std::string type = typeid(effect).name();
+    string type = typeid(effect).name();
     auto it = to_from_json_map.find(type);
     if (it == to_from_json_map.end())
     {
@@ -306,6 +306,10 @@ inline void to_json(nlohmann::json &j, const ILEDEffect &effect)
     }
     it->second.first(j, effect);
     j["type"] = type;
+
+    // Serialize schedule if we have one
+    if (effect.GetSchedule())
+        j["schedule"] = *effect.GetSchedule();
 }
 
 // Dynamically deserialize an effect from JSON based on its indicated type
@@ -324,6 +328,12 @@ inline void from_json(const nlohmann::json &j, shared_ptr<ILEDEffect> & effect)
     }
 
     effect = it->second.second(j);
+
+    // Deserialize schedule if present
+    if (j.contains("schedule")) {
+        auto schedule = j["schedule"].get<shared_ptr<ISchedule>>();
+        effect->SetSchedule(schedule);
+    }
 }
 
 // IEffectsManager <-- JSON
