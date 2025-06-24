@@ -7,8 +7,67 @@ using namespace chrono;
 // This file contains global definitions and includes that are used throughout the project.
 
 #include <string>
+#ifndef __NetBSD__
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h> // For colored console output
+#else
+// NetBSD stubs for spdlog functionality
+namespace spdlog {
+    namespace level {
+        enum level_enum {
+            trace = 0,
+            debug = 1,
+            info = 2,
+            warn = 3,
+            err = 4,
+            critical = 5,
+            off = 6
+        };
+    }
+    
+    class logger {
+    public:
+        // Template methods to handle variable arguments (like fmt library)
+        template<typename... Args>
+        void debug(const char* fmt, Args&&... args) const {}
+        
+        template<typename... Args>
+        void info(const char* fmt, Args&&... args) const {}
+        
+        template<typename... Args>
+        void warn(const char* fmt, Args&&... args) const {}
+        
+        template<typename... Args>
+        void error(const char* fmt, Args&&... args) const {}
+        
+        template<typename... Args>
+        void critical(const char* fmt, Args&&... args) const {}
+        
+        // Overloads for string arguments
+        template<typename... Args>
+        void debug(const std::string& fmt, Args&&... args) const {}
+        
+        template<typename... Args>
+        void info(const std::string& fmt, Args&&... args) const {}
+        
+        template<typename... Args>
+        void warn(const std::string& fmt, Args&&... args) const {}
+        
+        template<typename... Args>
+        void error(const std::string& fmt, Args&&... args) const {}
+        
+        template<typename... Args>
+        void critical(const std::string& fmt, Args&&... args) const {}
+        
+        void set_level(level::level_enum level) const {}
+    };
+    
+    inline std::shared_ptr<logger> stdout_color_mt(const std::string& name) {
+        return std::make_shared<logger>();
+    }
+}
+#endif
+
 #include "utilities.h"
 #include "secrets.h"
 
