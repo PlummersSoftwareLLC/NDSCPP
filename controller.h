@@ -15,7 +15,9 @@ using namespace std;
 #include "ledfeature.h"
 #include "effects/colorwaveeffect.h"
 #include "effects/starfield.h"
+#ifndef __NetBSD__
 #include "effects/videoeffect.h"
+#endif
 #include "effects/misceffects.h"
 #include "palette.h"
 #include "effects/paletteeffect.h"

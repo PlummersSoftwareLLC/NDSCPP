@@ -7,7 +7,9 @@ using namespace std::chrono;
 #include "effects/misceffects.h"
 #include "effects/paletteeffect.h"
 #include "effects/starfield.h"
+#ifndef __NetBSD__
 #include "effects/videoeffect.h"
+#endif
 #include "effects/bouncingballeffect.h"
 
 // EffectsManager
