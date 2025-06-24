@@ -291,8 +291,10 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
         jsonPair<FireworksEffect>(),
         jsonPair<SolidColorFill>(),
         jsonPair<PaletteEffect>(),
-        jsonPair<StarfieldEffect>(),
-        jsonPair<MP4PlaybackEffect>()
+        jsonPair<StarfieldEffect>()
+#ifndef __NetBSD__
+        ,jsonPair<MP4PlaybackEffect>()
+#endif
 };
 
 // Dynamically serialize an effect to JSON based on its actual type

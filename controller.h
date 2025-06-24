@@ -130,7 +130,9 @@ class Controller : public IController
             180                     // Client Buffer Count
         );
         canvasMesmerizer->AddFeature(std::move(feature1));
+#ifndef __NetBSD__        
         canvasMesmerizer->Effects().AddEffect(make_shared<MP4PlaybackEffect>("Money Video", "./media/mp4/goldendollars.mp4"));
+#endif
         canvasMesmerizer->Effects().SetCurrentEffect(0, *canvasMesmerizer);
         //_canvases.push_back(canvasMesmerizer);
 
