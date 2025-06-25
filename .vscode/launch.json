@@ -5,14 +5,33 @@
         "name": "Debug ndscpp",
         "type": "cppdbg",
         "request": "launch",
-        "program": "${workspaceFolder}/ndscpp", // Path to your compiled binary
-        "args": [], // Add program arguments here if needed
+        "program": "${workspaceFolder}/ndscpp",
+        "args": [],
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
         "environment": [],
         "externalConsole": false,
         "MIMode": "lldb",
-        "preLaunchTask": "Build ndscpp", // Run the build task before debugging
+        "preLaunchTask": "Build ndscpp",
+        "setupCommands": [
+          {
+            "description": "Enable pretty-printing for gdb",
+            "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+          }
+        ]
+      },
+      {
+        "name": "Debug ledmon",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/monitor/ledmon",
+        "args": [],
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}/monitor",
+        "environment": [],
+        "externalConsole": true,
+        "MIMode": "lldb",
         "setupCommands": [
           {
             "description": "Enable pretty-printing for gdb",
@@ -22,5 +41,4 @@
         ]
       }
     ]
-  }
-  
+}

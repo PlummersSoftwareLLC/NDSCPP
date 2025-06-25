@@ -43,7 +43,7 @@ void Monitor::drawContent()
         for (const auto &canvasJson : j)
         {
             std::string canvasName = canvasJson["name"].get<std::string>();
-            int canvasFps = canvasJson["fps"].get<int>();
+            int canvasFps = 0; // canvasJson["fps"].get<int>();
             std::string currentEffect = canvasJson.contains("currentEffectName")
                                           ? canvasJson.at("currentEffectName").get<std::string>()
                                           : "---";

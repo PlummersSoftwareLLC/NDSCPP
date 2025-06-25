@@ -1,6 +1,6 @@
 # Compiler settings
 CXX = g++
-CXXFLAGS = -std=c++20 -Wall -Wextra -Werror -O2
+CXXFLAGS = -std=c++20 -Wall -Wextra -Werror -O2 -g3
 INCLUDES = -I.
 LDFLAGS =
 

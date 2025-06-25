@@ -158,3 +158,11 @@ Includes compression utilities (using zlib), endian-safe conversions, and drawin
 
 Represents a 24-bit RGB color, including utility methods for HSV-to-RGB conversion and brightness adjustment.  
 Forms the base unit of color manipulation across the system.
+
+### NetBSD
+
+ gcc -I/usr/pkg/include -L/usr/pkg/lib -std=c++20 -g3 -O3 -Ieffects -llpthread -lz -lswscale -lswresample -lfmt -o main main.cpp
+
+Monitor:
+
+g++ -o ledmon main.cpp -I/usr/pkg/include -L/usr/pkg/lib -lncurses -I. -lcurl content.cpp
