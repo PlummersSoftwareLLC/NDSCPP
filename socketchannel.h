@@ -2,7 +2,26 @@
 using namespace std;
 
 #include <iostream>
+
+#if __cplusplus < 202002L
+// Not C++20 — define a minimal shim
+namespace std {
+    enum class endian {
+        little = 0,
+        big    = 1,
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        native = little
+#else
+        native = big
+#endif
+    };
+}
+#else
+// Ensure the standard definition is available
 #include <bit>
+#endif
+
+
 #include <string>
 #include <vector>
 #include <atomic>
