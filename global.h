@@ -2,6 +2,24 @@
 using namespace std;
 using namespace chrono;
 
+#if __cplusplus < 202002L
+// Not C++20 — define a minimal shim
+namespace std {
+    enum class endian {
+        little = 0,
+        big    = 1,
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        native = little
+#else
+        native = big
+#endif
+    };
+}
+#else
+// Ensure the standard definition is available
+#include <bit>
+#endif
+
 // Global Definitions
 //
 // This file contains global definitions and includes that are used throughout the project.

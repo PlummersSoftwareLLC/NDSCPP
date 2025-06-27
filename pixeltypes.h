@@ -666,7 +666,7 @@ struct CRGB
     }
 
     /// Return a CRGB object that is a scaled down version of this object
-    constexpr CRGB scale8(const CRGB &scaledown) const
+    CRGB scale8(const CRGB &scaledown) const
     {
         CRGB out;
         out.r = ::scale8(r, scaledown.r);
@@ -747,7 +747,7 @@ struct CRGB
     }
 
     /// Invert each channel
-    constexpr CRGB operator-() const
+    CRGB operator-() const
     {
         CRGB retval;
         retval.r = 255 - r;
@@ -822,7 +822,7 @@ struct CRGB
     }
 
     /// Return a new CRGB object after performing a linear interpolation between this object and the passed in object
-    constexpr CRGB lerp8(const CRGB &other, fract8 frac) const
+    CRGB lerp8(const CRGB &other, fract8 frac) const
     {
         CRGB ret;
 
@@ -834,7 +834,7 @@ struct CRGB
     }
 
     /// @copydoc lerp8
-    constexpr CRGB lerp16(const CRGB &other, fract16 frac) const
+    CRGB lerp16(const CRGB &other, fract16 frac) const
     {
         CRGB ret;
 

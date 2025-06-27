@@ -28,10 +28,11 @@ private:
     static constexpr float Gravity = -0.25f;
     static constexpr float StartHeight = 1.0f;
     static constexpr float ImpactVelocityStart = Utilities::constexpr_sqrt(-2.0f * Gravity * StartHeight);
-    static constexpr auto BallColors = to_array(
-        {
-            CRGB::Green, CRGB::Red, CRGB::Blue, CRGB::Orange, CRGB::Purple, CRGB::Yellow, CRGB::Indigo
-        });
+    static constexpr std::array<CRGB, 7> BallColors = {{
+        CRGB::Green, CRGB::Red, CRGB::Blue, CRGB::Orange,
+        CRGB::Purple, CRGB::Yellow, CRGB::Indigo
+    }};
+
 
 public:
     BouncingBallEffect(const string& name, size_t ballCount = 5, size_t ballSize = 1, bool mirrored = true, bool erase = true)

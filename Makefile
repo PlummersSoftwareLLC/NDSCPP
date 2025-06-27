@@ -1,7 +1,7 @@
 SHELL:=/bin/bash
 
 CC=clang++
-CFLAGS=-std=c++20 -g3 -O3 -Ieffects
+CFLAGS=-std=c++17 -g3 -O3 -Ieffects
 LDFLAGS=
 LIBS=-lpthread -lz -lavformat -lavcodec -lavutil -lswscale -lswresample -lfmt
 

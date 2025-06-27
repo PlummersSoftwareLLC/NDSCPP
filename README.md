@@ -161,7 +161,7 @@ Forms the base unit of color manipulation across the system.
 
 ### NetBSD
 
- g++ -I/usr/pkg/include -L/usr/pkg/lib -std=c++20 -O0 -Ieffects -lpthread -lz -lfmt -o main main.cpp
+ g++ -I/usr/pkg/include -L/usr/pkg/lib -std=c++2a -O0 -Ieffects -lpthread -lz -lfmt -o main main.cpp
 
 Monitor:
 
