@@ -5,6 +5,13 @@
 #include <ranges>
 #include <shared_mutex>
 #include "json.hpp"
+
+#define ASIO_NO_DEPRECATED 1
+
+namespace asio {
+    typedef io_context io_service;
+} // namespace asio
+
 #include "crow_all.h"
 #include "controller.h"
 
@@ -53,7 +60,7 @@ class WebServer
             reqJson = nlohmann::json::parse(req.body);
 
         unique_lock writeLock(_apiMutex);
-        
+
         if (reqJson.contains("canvasIds"))
         {
             for (auto& canvasId : reqJson["canvasIds"])
@@ -116,7 +123,7 @@ public:
 
         // Detail a single socket
 
-        CROW_ROUTE(_crowApp, "/api/sockets/<int>") 
+        CROW_ROUTE(_crowApp, "/api/sockets/<int>")
             .methods(crow::HTTPMethod::GET)([&](int socketId) -> crow::response
             {
                 try
@@ -156,16 +163,16 @@ public:
                 try
                 {
                     shared_lock readLock(_apiMutex);
-                    return nlohmann::json(*_controller.GetCanvasById(id)).dump(); 
+                    return nlohmann::json(*_controller.GetCanvasById(id)).dump();
                 }
                 catch(const exception& e)
                 {
                     logger->error("Error in /api/canvases/{}: {}", id, e.what());
                     return {crow::BAD_REQUEST, string("Error: ") + e.what()};
                 }
-                
+
             });
-            
+
         CROW_ROUTE(_crowApp, "/api/canvases/start")
             .methods(crow::HTTPMethod::POST)([&](const crow::request& req) -> crow::response
             {
@@ -200,7 +207,7 @@ public:
         CROW_ROUTE(_crowApp, "/api/canvases")
             .methods(crow::HTTPMethod::POST)([&](const crow::request& req) -> crow::response
             {
-                try 
+                try
                 {
                     // Parse and deserialize JSON payload
                     auto reqJson = nlohmann::json::parse(req.body);
@@ -220,9 +227,9 @@ public:
                     if (effectsManager.WantsToRun() && effectsManager.EffectCount() > 0)
                         effectsManager.Start(*canvas);
 
-                    return crow::response(201, nlohmann::json{{"id", newID}}.dump());                    
-                } 
-                catch (const exception& e) 
+                    return crow::response(201, nlohmann::json{{"id", newID}}.dump());
+                }
+                catch (const exception& e)
                 {
                     logger->error("Error in /api/canvases POST: {}", e.what());
                     return {crow::BAD_REQUEST, string("Error: ") + e.what()};
@@ -233,7 +240,7 @@ public:
             CROW_ROUTE(_crowApp, "/api/canvases/<int>/features")
                 .methods(crow::HTTPMethod::POST)([&](const crow::request& req, int canvasId) -> crow::response
                 {
-                    try 
+                    try
                     {
                         auto reqJson = nlohmann::json::parse(req.body);
                         auto feature = reqJson.get<shared_ptr<ILEDFeature>>();
@@ -245,8 +252,8 @@ public:
 
                         return nlohmann::json{{"id", newId}}.dump();
 
-                    } 
-                    catch (const exception& e) 
+                    }
+                    catch (const exception& e)
                     {
                         logger->error("Error in /api/canvases/{}/features POST: {}", canvasId, e.what());
                         return {crow::BAD_REQUEST, string("Error: ") + e.what()};
@@ -265,7 +272,7 @@ public:
                         canvas->RemoveFeatureById(featureId);
                         PersistController(req);
                         writeLock.unlock();
-                        
+
                         return crow::response(crow::OK);
                     }
                     catch(const exception& e)
@@ -274,7 +281,7 @@ public:
                         return crow::response(crow::BAD_REQUEST, string("Error: ") + e.what());
                     }
                 });
-                
+
 
             // Delete canvas
             CROW_ROUTE(_crowApp, "/api/canvases/<int>")
@@ -300,26 +307,26 @@ public:
         CROW_ROUTE(_crowApp, "/api/canvases/<int>/effects")
             .methods(crow::HTTPMethod::POST)([&](const crow::request& req, int canvasId) -> crow::response
             {
-                try 
+                try
                 {
                     auto reqJson = nlohmann::json::parse(req.body);
                     auto effect = reqJson.get<shared_ptr<ILEDEffect>>();
 
                     unique_lock writeLock(_apiMutex);
                     auto canvas = _controller.GetCanvasById(canvasId);
-                    
+
                     // Get current effects
                     auto& effectsManager = canvas->Effects();
-                    
+
                     // Add the new effect
                     effectsManager.AddEffect(effect);
-                    
+
                     PersistController(req);
                     writeLock.unlock();
 
                     return crow::response(crow::OK);
-                } 
-                catch (const exception& e) 
+                }
+                catch (const exception& e)
                 {
                     logger->error("Error adding effect to canvas {}: {}", canvasId, e.what());
                     return crow::response(crow::BAD_REQUEST, string("Error: ") + e.what());
