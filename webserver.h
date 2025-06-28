@@ -5,13 +5,6 @@
 #include <ranges>
 #include <shared_mutex>
 #include "json.hpp"
-
-#define ASIO_NO_DEPRECATED 1
-
-namespace asio {
-    typedef io_context io_service;
-} // namespace asio
-
 #include "crow_all.h"
 #include "controller.h"
 
