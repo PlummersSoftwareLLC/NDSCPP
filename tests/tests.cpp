@@ -202,6 +202,30 @@ TEST_F(APITest, CanvasFeatureOperations)
     auto featureInfo = json::parse(createFeatureResponse.text);
     int featureId = featureInfo["id"].get<int>();
 
+    auto getCanvasResponse = cpr::Get(cpr::Url{BASE_URL + "/canvases/" + std::to_string(newCanvasId)}, noPersistParam);
+
+    ASSERT_EQ(getCanvasResponse.status_code, 200);
+    auto canvasJson = json::parse(getCanvasResponse.text);
+    ASSERT_TRUE(canvasJson.contains("features"));
+    ASSERT_FALSE(canvasJson["features"].empty());
+
+    auto features = canvasJson["features"];
+    bool featureFound = false;
+
+    for (const auto &feature : features)
+    {
+        if (feature["id"].get<int>() == featureId)
+        {
+            featureFound = true;
+            ASSERT_TRUE(feature.contains("isConnected"));
+            ASSERT_EQ(feature["friendlyName"], "Test Feature");
+            ASSERT_EQ(feature["width"], 32);
+            ASSERT_EQ(feature["height"], 16);
+        }
+    }
+
+    ASSERT_TRUE(featureFound); // Ensure the feature was added to the canvas
+
     // Delete feature
     auto deleteFeatureResponse = cpr::Delete(
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(newCanvasId) + "/features/" + std::to_string(featureId)},
