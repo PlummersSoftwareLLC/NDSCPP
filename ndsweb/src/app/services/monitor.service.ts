@@ -43,7 +43,6 @@ export interface Canvas {
         type: string;
     };
     features: Feature[];
-    fps: number;
     height: number;
     id: number;
     name: string;

@@ -14,7 +14,7 @@ using json = nlohmann::json;
 const std::vector<std::pair<std::string, int>> COLUMNS =
     {
         {"Canvas", 10},   // Canvas name (matched to Feature width)
-        {"Feature", 10},  // Feature name 
+        {"Feature", 10},  // Feature name
         {"Host", 14},     // Hostname
         {"Size", 7},      // Dimensions
         {"Cx", 3},        // Reconnects
@@ -43,7 +43,7 @@ void Monitor::drawContent()
         for (const auto &canvasJson : j)
         {
             std::string canvasName = canvasJson["name"].get<std::string>();
-            int canvasFps = canvasJson["fps"].get<int>();
+            int canvasFps = canvasJson["effectsManager"]["fps"].get<int>();
             std::string currentEffect = canvasJson.contains("currentEffectName")
                                           ? canvasJson.at("currentEffectName").get<std::string>()
                                           : "---";
@@ -106,14 +106,14 @@ void Monitor::drawContent()
                     {
                         const auto &stats = featureJson["lastClientResponse"];
                         int featureFps = stats["fpsDrawing"].get<int>();
-                        
+
                         int colorPair = (featureFps < 0.8 * canvasFps) ? 6 : 1;
                         wattron(contentWin, COLOR_PAIR(colorPair));
                         mvwprintw(contentWin, row - scrollOffset, x, "%d", featureFps);
                         wattroff(contentWin, COLOR_PAIR(colorPair));
-                        
+
                         mvwprintw(contentWin, row - scrollOffset, x + std::to_string(featureFps).length(), "/%d", canvasFps);
-                        
+
                         int totalWidth = std::to_string(featureFps).length() + 1 + std::to_string(canvasFps).length();
                         mvwprintw(contentWin, row - scrollOffset, x + totalWidth, "%*s", COLUMNS[5].second - totalWidth, "");
                     }
@@ -130,7 +130,7 @@ void Monitor::drawContent()
                         try
                         {
                             size_t queueDepth = featureJson["queueDepth"].get<size_t>();
-                            int queueColor = queueDepth < 100 ? 1 : 
+                            int queueColor = queueDepth < 100 ? 1 :
                                            queueDepth < 250 ? 6 : 2;
 
                             std::wstring bar = buildProgressBar(queueDepth, kFatQueue, 6);
