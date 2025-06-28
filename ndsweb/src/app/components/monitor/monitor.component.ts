@@ -396,7 +396,7 @@ export class MonitorComponent implements OnChanges {
                 : reconnectCount < 10
                 ? 'warning'
                 : 'danger',
-            canvasFps: canvas.fps,
+            canvasFps: canvas.effectsManager.fps,
             featureFps: 90,
             fpsStatus: null,
             bufferSize: null,
@@ -444,7 +444,7 @@ export class MonitorComponent implements OnChanges {
                     ? 'warning'
                     : 'danger';
 
-            data.fpsStatus = fps < 0.8 * canvas.fps ? 'warning' : 'good';
+            data.fpsStatus = fps < 0.8 * canvas.effectsManager.fps ? 'warning' : 'good';
             data.bufferStatus =
                 ratio >= 0.25 && ratio <= 0.85
                     ? 'good'
