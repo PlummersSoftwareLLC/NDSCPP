@@ -33,7 +33,7 @@
         "@angular/language-service": "~19.0.0",
         "@angular/material": "^19.0.2",
         "@eslint/js": "^9.8.0",
-        "@nx/angular": "20.8.2",
+        "@nx/angular": "21.4.1",
         "@nx/eslint": "20.2.1",
         "@nx/eslint-plugin": "20.2.1",
         "@nx/jest": "20.2.1",
