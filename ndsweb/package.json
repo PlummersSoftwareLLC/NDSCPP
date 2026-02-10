@@ -28,7 +28,7 @@
         "@angular-devkit/build-angular": "~20.3.4",
         "@angular-devkit/core": "~19.0.0",
         "@angular-devkit/schematics": "~19.0.0",
-        "@angular/cli": "~21.1.0",
+        "@angular/cli": "~21.1.3",
         "@angular/compiler-cli": "~19.0.0",
         "@angular/language-service": "~19.0.0",
         "@angular/material": "^19.0.2",
