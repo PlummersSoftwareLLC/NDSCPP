@@ -53,3 +53,28 @@ jobs:
         sleep 1
         LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/lib ./tests/tests
         sudo killall -9 ndscpp
+
+  build-web:
+
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ndsweb
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: ndsweb/package-lock.json
+
+    - name: Install dependencies
+      run: npm install --legacy-peer-deps
+
+    - name: Build ndsweb
+      run: npx nx build
