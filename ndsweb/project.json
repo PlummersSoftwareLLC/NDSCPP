@@ -50,7 +50,16 @@
                         }
                     ],
                     "outputHashing": "all",
-                    "optimization": true,
+                    "optimization": {
+                        "scripts": true,
+                        "styles": {
+                            "minify": true,
+                            "inlineCritical": true
+                        },
+                        "fonts": {
+                            "inline": false
+                        }
+                    },
                     "namedChunks": true,
                     "extractLicenses": true,
                     "vendorChunk": true,
