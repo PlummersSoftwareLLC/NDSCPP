@@ -156,6 +156,9 @@ inline void from_json(const nlohmann::json& j, shared_ptr<ICanvas> & canvas)
         j.at("height").get<uint32_t>()
     );
 
+    if (j.contains("id"))
+        canvas->SetId(j.at("id").get<uint32_t>());
+
     // Features()
     for (const auto& featureJson : j.value("features", nlohmann::json::array()))
         canvas->AddFeature(featureJson.get<shared_ptr<ILEDFeature>>());

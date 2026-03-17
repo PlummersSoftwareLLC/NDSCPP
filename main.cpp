@@ -19,6 +19,8 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <filesystem>
+#include <optional>
 #include <getopt.h>
 
 using namespace std;
@@ -31,9 +33,28 @@ using namespace chrono;
 #include "socketchannel.h"
 #include "ledfeature.h"
 #include "webserver.h"
+#include "dashboardserver.h"
 #include "controller.h"
 #include "schedule.h"
 
+namespace
+{
+    atomic<bool> gShouldExit{false};
+
+    void HandleSignal(int)
+    {
+        gShouldExit = true;
+    }
+
+    optional<uint16_t> ParsePortOption(const char *value, const char *optionName)
+    {
+        const auto parsedPort = atoi(value);
+        if (parsedPort < 1 || parsedPort > 65535)
+            throw runtime_error(string(optionName) + " must be between 1 and 65535");
+
+        return static_cast<uint16_t>(parsedPort);
+    }
+}
 
 atomic<uint32_t> Canvas::_nextId{0};        // Initialize the static member variable for canvas.h
 atomic<uint32_t> LEDFeature::_nextId{0};    // Initialize the static member variable for ledfeature.h
@@ -48,31 +69,39 @@ int main(int argc, char *argv[])
 {
     logger->set_level(spdlog::level::info);
 
-    uint16_t port = 7777;
-    string   filename = "config.led";
+    optional<uint16_t> apiPortOverride;
+    optional<uint16_t> webUiPortOverride;
+    string filename = "config.led";
 
     // Parse command-line options
     int opt;
-    while ((opt = getopt(argc, argv, "p:c:")) != -1) 
+    const option longOptions[] =
     {
-        switch (opt) 
+        {"port", required_argument, nullptr, 'p'},
+        {"config", required_argument, nullptr, 'c'},
+        {"webuiport", required_argument, nullptr, 'w'},
+        {"help", no_argument, nullptr, 'h'},
+        {nullptr, 0, nullptr, 0}
+    };
+
+    while ((opt = getopt_long(argc, argv, "p:c:w:h", longOptions, nullptr)) != -1)
+    {
+        switch (opt)
         {
-            case 'p': 
-            {
-                int parsedPort = atoi(optarg);
-                if (parsedPort < 1 || parsedPort > 65535) 
-                {
-                    logger->error("Error: Port number must be between 1 and 65535, but was {}", parsedPort);
-                    return EXIT_FAILURE;
-                }
-                port = static_cast<uint16_t>(parsedPort);
+            case 'p':
+                apiPortOverride = ParsePortOption(optarg, "Port");
                 break;
-            }
             case 'c':
                 filename = optarg;
                 break;
+            case 'w':
+                webUiPortOverride = ParsePortOption(optarg, "Web UI port");
+                break;
+            case 'h':
+                cerr << "Usage: " << argv[0] << " [-p <port>] [-w <webuiport>] [-c <configfile>]" << endl;
+                return EXIT_SUCCESS;
             default:
-                cerr << "Usage: " << argv[0] << " [-p <portid>] [-c <configfile>]" << endl;
+                cerr << "Usage: " << argv[0] << " [-p <port>] [-w <webuiport>] [-c <configfile>]" << endl;
                 return EXIT_FAILURE;
         }
     }
@@ -83,22 +112,66 @@ int main(int argc, char *argv[])
     #define USE_DEMO_DATA 0
 
     #if USE_DEMO_DATA
-        unique_ptr<Controller> ptrController = make_unique<Controller>(port);
+        unique_ptr<Controller> ptrController = make_unique<Controller>(7777, 9997);
         ptrController->LoadSampleCanvases();
     #else
         unique_ptr<Controller> ptrController = Controller::CreateFromFile(filename);
-    #endif    
-    
-    ptrController->SetPort(port);
+    #endif
+
+    if (apiPortOverride)
+        ptrController->SetPort(*apiPortOverride);
+    if (webUiPortOverride)
+        ptrController->SetWebUIPort(*webUiPortOverride);
+
+    if (ptrController->GetPort() == ptrController->GetWebUIPort())
+    {
+        logger->error("API port {} and web UI port {} cannot be the same", ptrController->GetPort(), ptrController->GetWebUIPort());
+        return EXIT_FAILURE;
+    }
+
+    signal(SIGINT, HandleSignal);
+    signal(SIGTERM, HandleSignal);
+
     ptrController->Connect();
     ptrController->Start(true); // Consider if effect managers want to run
 
-    // Start the web server
+    const auto executableDir = filesystem::weakly_canonical(filesystem::absolute(argv[0])).parent_path();
+    const auto assetRoot = executableDir / "webui";
+
     crow::logger::setLogLevel(crow::LogLevel::WARNING);
-    WebServer webServer(*ptrController.get(), filename);
-    webServer.Start();
+    shared_mutex apiMutex;
+    WebServer apiServer(*ptrController.get(), filename, apiMutex);
+    DashboardServer dashboardServer(*ptrController.get(), filename, apiMutex, assetRoot);
+
+    try
+    {
+        apiServer.StartAsync();
+        dashboardServer.StartAsync();
+    }
+    catch (const exception &e)
+    {
+        logger->error("Failed to start servers: {}", e.what());
+        dashboardServer.Stop();
+        apiServer.Stop();
+        dashboardServer.Wait();
+        apiServer.Wait();
+        ptrController->Stop();
+        ptrController->Disconnect();
+        return EXIT_FAILURE;
+    }
+
+    logger->info("API listening on http://localhost:{}/api", ptrController->GetPort());
+    logger->info("Dashboard listening on http://localhost:{}/", ptrController->GetWebUIPort());
+
+    while (!gShouldExit)
+        this_thread::sleep_for(100ms);
 
     cout << "Shutting down..." << endl;
+
+    dashboardServer.Stop();
+    apiServer.Stop();
+    dashboardServer.Wait();
+    apiServer.Wait();
 
     // Shut down rendering and communications
     ptrController->Stop();

@@ -62,6 +62,12 @@ public:
         return _id; 
     }
 
+    uint32_t SetId(uint32_t id) override
+    {
+        _id = id;
+        return _id;
+    }
+
     // Accessor methods
     uint32_t        Width()             const override { return _width; }
     uint32_t        Height()            const override { return _height; }
@@ -228,5 +234,7 @@ inline void from_json(const nlohmann::json& j, shared_ptr<ILEDFeature> & feature
         j.at("redGreenSwap").get<bool>(),
         j.at("clientBufferCount").get<uint32_t>()
     );
-}
 
+    if (j.contains("id"))
+        feature->SetId(j.at("id").get<uint32_t>());
+}

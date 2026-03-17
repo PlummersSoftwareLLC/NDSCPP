@@ -32,15 +32,18 @@ class Controller : public IController
 
     vector<shared_ptr<ICanvas>> _canvases;
     uint16_t                    _port;
+    uint16_t                    _webUiPort;
     mutable mutex               _canvasMutex;
 
   public:
 
-    Controller(uint16_t port = 7777) : _port(port)
+    Controller(uint16_t port, uint16_t webUiPort = 9997)
+        : _port(port),
+          _webUiPort(webUiPort)
     {
     }
 
-    Controller() : _port(7777) 
+    Controller() : Controller(7777, 9997)
     {
     }
 
@@ -84,6 +87,16 @@ class Controller : public IController
     void SetPort(uint16_t port) override
     {
         _port = port;
+    }
+
+    uint16_t GetWebUIPort() const override
+    {
+        return _webUiPort;
+    }
+
+    void SetWebUIPort(uint16_t port) override
+    {
+        _webUiPort = port;
     }
 
     bool AddFeatureToCanvas(uint16_t canvasId, shared_ptr<ILEDFeature> feature) override
@@ -465,7 +478,19 @@ class Controller : public IController
             auto canvasId = ptrCanvas->Id();
             for (size_t i = 0; i < _canvases.size(); ++i) {
                 if (_canvases[i]->Id() == canvasId) {
+                    auto oldCanvas = _canvases[i];
+                    oldCanvas->Effects().Stop();
+                    for (auto &feature : oldCanvas->Features())
+                        feature->Socket()->Stop();
+
                     _canvases[i] = ptrCanvas;
+
+                    for (auto &feature : ptrCanvas->Features())
+                        feature->Socket()->Start();
+
+                    if (ptrCanvas->Effects().WantsToRun() && ptrCanvas->Effects().EffectCount() > 0)
+                        ptrCanvas->Effects().Start(*ptrCanvas);
+
                     return true;
                 }
             }
@@ -518,6 +543,7 @@ inline void to_json(nlohmann::json &j, const IController &controller)
     try
     {
         j["port"] = controller.GetPort();
+        j["webuiport"] = controller.GetWebUIPort();
         for (const auto &canvas : controller.Canvases())
             j["canvases"].push_back(*canvas);
     }
@@ -535,9 +561,10 @@ inline void from_json(const nlohmann::json &j, unique_ptr<Controller> & ptrContr
     {
         // Extract port
         uint16_t port = j.at("port").get<uint16_t>();
+        uint16_t webUiPort = j.value("webuiport", uint16_t(9997));
 
         // Create controller
-        ptrController = make_unique<Controller>(port);
+        ptrController = make_unique<Controller>(port, webUiPort);
 
         // Extract canvases
         for (const auto &canvasJson : j.at("canvases"))

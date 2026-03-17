@@ -286,6 +286,7 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
 {
         jsonPair<BouncingBallEffect>(),
         jsonPair<ColorWaveEffect>(),
+        jsonPair<DaveDebugEffect>(),
         jsonPair<FireworksEffect>(),
         jsonPair<SolidColorFill>(),
         jsonPair<PaletteEffect>(),
@@ -340,10 +341,14 @@ inline void from_json(const nlohmann::json &j, shared_ptr<ILEDEffect> & effect)
 
 inline void to_json(nlohmann::json &j, const IEffectsManager &manager)
 {
+    const auto currentEffectIndex = manager.EffectCount() == 0
+        ? -1
+        : static_cast<int>(manager.GetCurrentEffect());
+
     j = 
     {
         {"fps", manager.GetFPS()},
-        {"currentEffectIndex", manager.GetCurrentEffect()},
+        {"currentEffectIndex", currentEffectIndex},
         {"running", manager.IsRunning()}
     };
         
