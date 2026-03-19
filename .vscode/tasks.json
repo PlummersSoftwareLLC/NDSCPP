@@ -2,6 +2,17 @@
     "version": "2.0.0",
     "tasks": [
       {
+        "label": "Kill ndscpp",
+        "type": "shell",
+        "command": "bash",
+        "args": [
+          "-lc",
+          "pkill -x ndscpp >/dev/null 2>&1 || true"
+        ],
+        "problemMatcher": [],
+        "detail": "Stop any ndscpp process left over from a prior run."
+      },
+      {
         "label": "Build ndscpp",
         "type": "shell",
         "command": "make",
@@ -12,6 +23,16 @@
         },
         "problemMatcher": [],
         "detail": "Build the ndscpp program using make."
+      },
+      {
+        "label": "Prepare ndscpp",
+        "dependsOrder": "sequence",
+        "dependsOn": [
+          "Kill ndscpp",
+          "Build ndscpp"
+        ],
+        "problemMatcher": [],
+        "detail": "Kill the previous ndscpp process and rebuild before launching."
       }
     ]
   }

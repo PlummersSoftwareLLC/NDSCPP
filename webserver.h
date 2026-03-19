@@ -86,6 +86,51 @@ public:
                 }
             });
 
+        // Replace the entire controller state (load config)
+        CROW_ROUTE(_crowApp, "/api/controller")
+            .methods(crow::HTTPMethod::PUT)([&](const crow::request& req) -> crow::response
+            {
+                try
+                {
+                    auto reqJson = nlohmann::json::parse(req.body);
+                    const auto &canvasesJson = reqJson.is_array()
+                        ? reqJson
+                        : reqJson.value("canvases", nlohmann::json::array());
+                    unique_lock writeLock(_apiMutex);
+
+                    _controller.ClearAllCanvases();
+
+                    for (const auto &canvasJson : canvasesJson)
+                        _controller.AddCanvas(canvasJson.get<shared_ptr<ICanvas>>());
+
+                    _controller.WriteToFile(_controllerFileName);
+                    return crow::response(crow::OK);
+                }
+                catch(const exception& e)
+                {
+                    logger->error("Error in /api/controller PUT: {}", e.what());
+                    return {crow::BAD_REQUEST, string("Error: ") + e.what()};
+                }
+            });
+
+        // Clear all canvases (new config)
+        CROW_ROUTE(_crowApp, "/api/controller/reset")
+            .methods(crow::HTTPMethod::POST)([&](const crow::request&) -> crow::response
+            {
+                try
+                {
+                    unique_lock writeLock(_apiMutex);
+                    _controller.ClearAllCanvases();
+                    _controller.WriteToFile(_controllerFileName);
+                    return crow::response(crow::OK);
+                }
+                catch(const exception& e)
+                {
+                    logger->error("Error in /api/controller/reset: {}", e.what());
+                    return {crow::BAD_REQUEST, string("Error: ") + e.what()};
+                }
+            });
+
         // Enumerate just the sockets
 
         CROW_ROUTE(_crowApp, "/api/sockets")

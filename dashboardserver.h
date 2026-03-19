@@ -62,6 +62,7 @@ class DashboardServer
 
         crow::response response(crow::OK);
         response.set_header("Content-Type", ContentTypeFor(path));
+        response.set_header("Cache-Control", "no-store");
         response.write(buffer.str());
         return response;
     }
@@ -120,6 +121,51 @@ public:
                 catch (const exception &e)
                 {
                     logger->error("Error in dashboard /api/controller: {}", e.what());
+                    return {crow::BAD_REQUEST, string("Error: ") + e.what()};
+                }
+            });
+
+        // Replace the entire controller state (load config)
+        CROW_ROUTE(_crowApp, "/api/controller")
+            .methods(crow::HTTPMethod::PUT)([this](const crow::request &req) -> crow::response
+            {
+                try
+                {
+                    auto reqJson = nlohmann::json::parse(req.body);
+                    const auto &canvasesJson = reqJson.is_array()
+                        ? reqJson
+                        : reqJson.value("canvases", nlohmann::json::array());
+                    unique_lock writeLock(_apiMutex);
+
+                    _controller.ClearAllCanvases();
+
+                    for (const auto &canvasJson : canvasesJson)
+                        _controller.AddCanvas(canvasJson.get<shared_ptr<ICanvas>>());
+
+                    _controller.WriteToFile(_controllerFileName);
+                    return crow::response(crow::OK);
+                }
+                catch (const exception &e)
+                {
+                    logger->error("Error in dashboard /api/controller PUT: {}", e.what());
+                    return {crow::BAD_REQUEST, string("Error: ") + e.what()};
+                }
+            });
+
+        // Clear all canvases (new config)
+        CROW_ROUTE(_crowApp, "/api/controller/reset")
+            .methods(crow::HTTPMethod::POST)([this](const crow::request &) -> crow::response
+            {
+                try
+                {
+                    unique_lock writeLock(_apiMutex);
+                    _controller.ClearAllCanvases();
+                    _controller.WriteToFile(_controllerFileName);
+                    return crow::response(crow::OK);
+                }
+                catch (const exception &e)
+                {
+                    logger->error("Error in dashboard /api/controller/reset: {}", e.what());
                     return {crow::BAD_REQUEST, string("Error: ") + e.what()};
                 }
             });

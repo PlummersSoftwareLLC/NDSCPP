@@ -409,7 +409,7 @@ bool EnqueueFrame(vector<uint8_t>&& frameData) override
 
     if (isQueueFull)
     {
-        logger->warn("Queue is full at {} [{}] dropping frame and resetting socket", _hostName, _friendlyName);
+        logger->debug("Queue is full at {} [{}] dropping frame and resetting socket", _hostName, _friendlyName);
         CloseSocket();
         EmptyQueue();
         return false;
@@ -617,7 +617,7 @@ private:
     {
         if (_socketFd == -1 && !ConnectSocket())
         {
-            logger->warn("Could not connect to {} [{}] in SendFrame", _hostName, _friendlyName);
+            logger->debug("Could not connect to {} [{}] in SendFrame", _hostName, _friendlyName);
             lock_guard lock(_mutex);
             _isConnected = false;
             return nullopt;
@@ -709,7 +709,7 @@ private:
         {
             if (errno != EINPROGRESS)
             {
-                logger->warn("Could not connect to {} [{}] errno={}", _hostName, _friendlyName, errno);
+                logger->debug("Could not connect to {} [{}] errno={}", _hostName, _friendlyName, errno);
                 close(tempSocket);
                 return false;
             }
@@ -721,7 +721,7 @@ private:
             
             if (poll(&pfd, 1, kConnectTimeout.count()) <= 0)
             {
-                logger->warn("Connection timeout to {} [{}]", _hostName, _friendlyName);
+                logger->debug("Connection timeout to {} [{}]", _hostName, _friendlyName);
                 close(tempSocket);
                 return false;
             }

@@ -266,6 +266,7 @@ public:
     virtual vector<shared_ptr<ICanvas>> Canvases() const = 0;
     virtual uint32_t AddCanvas(shared_ptr<ICanvas> ptrCanvas) = 0;
     virtual bool DeleteCanvasById(uint32_t id) = 0;
+    virtual void ClearAllCanvases() = 0;
     virtual bool UpdateCanvas(shared_ptr<ICanvas> ptrCanvas) = 0;
     virtual bool AddFeatureToCanvas(uint16_t canvasId, shared_ptr<ILEDFeature> feature) = 0;
     virtual void RemoveFeatureFromCanvas(uint16_t canvasId, uint16_t featureId) = 0;

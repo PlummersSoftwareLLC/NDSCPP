@@ -3,18 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NDSCPP Control Panel</title>
+  <title>NDSCPP Canvas Navigator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <div class="backdrop"></div>
   <div class="grid-overlay"></div>
+
   <main class="shell">
     <header class="topbar panel card-blue">
       <div class="title-block">
-        <p class="eyebrow">NightDriver Strip Telemetry</p>
-        <h1>NDSCPP Control Panel</h1>
-        <p class="subtitle">LED monitor surface inspired by the Robotron metrics console.</p>
+        <h1>NightDriver Web Control</h1>
       </div>
       <div class="status-cluster">
         <div class="status-pill" id="connectionStatus">
@@ -33,27 +35,52 @@
     </header>
 
     <section class="toolbar panel card-orange">
-      <label class="field">
+      <div class="toolbar-group">
+        <span class="toolbar-label">Load and Save</span>
+        <div class="button-group">
+          <button id="newConfigButton" class="action-button" type="button" title="New Configuration">&#x2795; New</button>
+          <span class="split-button">
+            <button id="loadConfigButton" class="action-button" type="button" title="Load Configuration">&#x1f4c2; Load</button>
+            <button id="loadDropdownToggle" class="action-button split-button-arrow" type="button" title="Load Options">&#x25BE;</button>
+            <div id="loadDropdownMenu" class="split-button-menu">
+              <button class="split-button-menu-item" type="button" data-load-mode="load">&#x1f4c2; Load &mdash; Replace All</button>
+              <button class="split-button-menu-item" type="button" data-load-mode="insert">&#x2795; Insert &mdash; Merge Into Current</button>
+            </div>
+          </span>
+          <button id="saveConfigButton" class="action-button" type="button" title="Save Configuration">&#x1f4be; Save</button>
+        </div>
+      </div>
+      <div class="toolbar-group">
+        <span class="toolbar-label">Refresh</span>
+        <div class="toolbar-row">
+          <div class="button-group">
+            <span class="split-button">
+              <button id="refreshIntervalButton" class="action-button" type="button" title="Refresh Interval">&#x23F1; 2 sec</button>
+              <button id="refreshDropdownToggle" class="action-button split-button-arrow" type="button" title="Interval Options">&#x25BE;</button>
+              <div id="refreshDropdownMenu" class="split-button-menu">
+                <button class="split-button-menu-item" type="button" data-interval="1000">1 sec</button>
+                <button class="split-button-menu-item" type="button" data-interval="2000">2 sec</button>
+                <button class="split-button-menu-item" type="button" data-interval="5000">5 sec</button>
+                <button class="split-button-menu-item" type="button" data-interval="10000">10 sec</button>
+              </div>
+            </span>
+          </div>
+          <label class="toggle">
+            <input id="autoRefreshToggle" type="checkbox" checked>
+            <span>Auto</span>
+          </label>
+        </div>
+      </div>
+      <div class="button-group">
+        <button id="refreshButton" class="action-button" type="button" title="Refresh Now">&#x21bb; Refresh</button>
+        <button id="startAllButton" class="action-button accent" type="button" title="Start All Canvases">&#x25b6; Start</button>
+        <button id="stopAllButton" class="action-button warning" type="button" title="Stop All Canvases">&#x25a0; Stop</button>
+      </div>
+      <label class="field" style="margin-left: auto;">
         <span>Filter</span>
         <input id="filterInput" type="search" placeholder="Canvas, feature, host, effect">
       </label>
-      <label class="field field-compact">
-        <span>Refresh</span>
-        <select id="refreshIntervalSelect">
-          <option value="1000">1 sec</option>
-          <option value="2000" selected>2 sec</option>
-          <option value="5000">5 sec</option>
-          <option value="10000">10 sec</option>
-        </select>
-      </label>
-      <label class="toggle">
-        <input id="autoRefreshToggle" type="checkbox" checked>
-        <span>Auto Refresh</span>
-      </label>
-      <button id="refreshButton" class="action-button" type="button">Refresh Now</button>
-      <button id="startAllButton" class="action-button accent" type="button">Start All</button>
-      <button id="stopAllButton" class="action-button warning" type="button">Stop All</button>
-      <div class="toolbar-meta" id="lastUpdatedText">Awaiting first sample</div>
+      <input id="configFileInput" type="file" accept=".led,.json" hidden>
     </section>
 
     <section class="summary-grid">
@@ -100,58 +127,38 @@
     </section>
 
     <section class="main-grid">
-      <article class="panel table-panel card-cyan">
+      <article class="panel table-panel card-green">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Monitor View</p>
-            <h2>Feature Telemetry</h2>
+            <h2>Canvases</h2>
           </div>
-          <div class="panel-header-actions">
-            <button id="newCanvasButton" class="action-button accent" type="button">New Canvas</button>
-            <div class="panel-meta" id="tableMetaText">0 rows</div>
-          </div>
+          <div class="panel-meta" id="tableMetaText">0 canvases</div>
         </div>
+
         <div class="table-wrap">
-          <table class="metrics-table">
+          <table class="canvas-table">
             <thead>
               <tr>
-                <th><button type="button" class="sort-button" data-sort-key="canvasName">Canvas</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="featureName">Feature</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="hostName">Host</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="sizeSort">Size</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="reconnectCount">Cx</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="featureFps">FPS</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="queueDepth">Queue</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="bufferRatio">Buf</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="wifiSignalAbs">Signal</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="bandwidth">Data</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="deltaSeconds">Delta</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="flashVersionSort">Flash</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="statusSort">Status</button></th>
-                <th><button type="button" class="sort-button" data-sort-key="currentEffectName">Effect</button></th>
+                <th class="checkbox-cell"></th>
+                <th class="expander-column"></th>
+                <th><button type="button" class="sort-button" data-sort-key="name">Canvas Name</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="dimensions">Dimensions</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="featureCount">Features</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="effectCount">Effects</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="currentEffectName">Current Effect</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="fps">FPS</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="status">Status</button></th>
               </tr>
             </thead>
-            <tbody id="metricsTableBody">
+            <tbody id="canvasTableBody">
               <tr>
-                <td colspan="14" class="empty-cell">No telemetry yet.</td>
+                <td colspan="9" class="empty-cell">No canvases loaded.</td>
               </tr>
             </tbody>
           </table>
         </div>
+        <div id="canvasFolderTab"></div>
       </article>
-
-      <aside class="panel canvases-panel card-purple">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Control Surface</p>
-            <h2>Canvases</h2>
-          </div>
-          <div class="panel-meta" id="canvasMetaText">0 configured</div>
-        </div>
-        <div class="canvas-list" id="canvasList">
-          <div class="canvas-empty">No canvases loaded.</div>
-        </div>
-      </aside>
     </section>
   </main>
 
@@ -327,37 +334,6 @@
     </form>
   </dialog>
 
-  <dialog id="effectsDialog" class="editor-dialog">
-    <div class="dialog-shell panel card-blue">
-      <header class="dialog-header">
-        <div>
-          <p class="eyebrow" id="effectsDialogEyebrow">Effects Rack</p>
-          <h2 id="effectsDialogTitle">Canvas Effects</h2>
-          <p class="dialog-copy" id="effectsDialogCopy">Add, edit, remove, and reorder the active look for this canvas.</p>
-        </div>
-        <button class="icon-button" type="button" data-close-dialog="effectsDialog">Close</button>
-      </header>
-
-      <div class="dialog-toolbar">
-        <button id="addEffectButton" class="action-button accent" type="button">Add Effect</button>
-        <label class="field field-compact">
-          <span>Current Effect</span>
-          <select id="currentEffectSelect"></select>
-        </label>
-      </div>
-
-      <div class="effects-list" id="effectsList">
-        <div class="canvas-empty">No effects configured.</div>
-      </div>
-
-      <p class="dialog-message" id="effectsDialogMessage"></p>
-
-      <footer class="dialog-footer">
-        <button class="action-button" type="button" data-close-dialog="effectsDialog">Close</button>
-      </footer>
-    </div>
-  </dialog>
-
   <dialog id="effectDialog" class="editor-dialog">
     <form id="effectForm" class="dialog-shell panel card-cyan" method="dialog" novalidate>
       <header class="dialog-header">
@@ -420,6 +396,26 @@
         <button id="effectSaveButton" class="action-button accent" type="submit">Save Effect</button>
       </footer>
     </form>
+  </dialog>
+
+  <dialog id="collisionDialog" class="editor-dialog">
+    <div class="dialog-shell panel card-yellow" style="max-width: 480px;">
+      <header class="dialog-header">
+        <div>
+          <p class="eyebrow">Canvas Conflict</p>
+          <h2 id="collisionDialogTitle">Duplicate Canvas</h2>
+          <p class="dialog-copy" id="collisionDialogCopy"></p>
+        </div>
+      </header>
+      <label class="toggle dialog-toggle">
+        <input id="collisionRepeatCheckbox" type="checkbox">
+        <span>Apply to all remaining conflicts</span>
+      </label>
+      <footer class="dialog-footer">
+        <button id="collisionNoButton" class="action-button" type="button">No &mdash; Skip</button>
+        <button id="collisionYesButton" class="action-button accent" type="button">Yes &mdash; Overwrite</button>
+      </footer>
+    </div>
   </dialog>
 
   <script src="/app.js" defer></script>

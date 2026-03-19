@@ -220,19 +220,18 @@ inline void to_json(nlohmann::json& j, const ILEDFeature & feature)
 
 inline void from_json(const nlohmann::json& j, shared_ptr<ILEDFeature> & feature) 
 {
-    // Use `at` for all fields since they are mandatory
     feature = make_shared<LEDFeature>(
         j.at("hostName").get<string>(),
         j.at("friendlyName").get<string>(),
-        j.at("port").get<uint16_t>(),
+        j.value("port", uint16_t(49152)),
         j.at("width").get<uint32_t>(),
         j.at("height").get<uint32_t>(),
-        j.at("offsetX").get<uint32_t>(),
-        j.at("offsetY").get<uint32_t>(),
-        j.at("reversed").get<bool>(),
-        j.at("channel").get<uint8_t>(),
-        j.at("redGreenSwap").get<bool>(),
-        j.at("clientBufferCount").get<uint32_t>()
+        j.value("offsetX", uint32_t(0)),
+        j.value("offsetY", uint32_t(0)),
+        j.value("reversed", false),
+        j.value("channel", uint8_t(0)),
+        j.value("redGreenSwap", false),
+        j.value("clientBufferCount", uint32_t(500))
     );
 
     if (j.contains("id"))

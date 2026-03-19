@@ -1,7 +1,7 @@
-const STORAGE_KEY = "ndscpp.dashboard.settings.v1";
+const STORAGE_KEY = "ndscpp.navigator.settings.v1";
 const DEFAULT_REFRESH_MS = 2000;
-const QUEUE_VISUAL_MAX = 25;
 const DEFAULT_PORT = 49152;
+const QUEUE_VISUAL_MAX = 25;
 const DAY_OPTIONS = [
   { label: "Sun", mask: 0x01 },
   { label: "Mon", mask: 0x02 },
@@ -11,6 +11,26 @@ const DAY_OPTIONS = [
   { label: "Fri", mask: 0x20 },
   { label: "Sat", mask: 0x40 },
 ];
+const NESTED_PRIMARY_COLUMN_WIDTH = "3%";
+const FEATURE_TABLE_COLUMNS = [
+  { label: "Name", width: "8%" },
+  { label: "Host", width: "11%" },
+  { label: "Port", width: "6%", align: "right" },
+  { label: "Width", width: "4%", align: "right" },
+  { label: "Height", width: "4%", align: "right" },
+  { label: "Offset X", width: "7%", align: "right" },
+  { label: "Offset Y", width: "7%", align: "right" },
+  { label: "Channel", width: "6%", align: "right" },
+  { label: "Queue", width: "17%" },
+  { label: "Buffer", width: "18%" },
+  { label: "Status", width: "9%" },
+];
+const EFFECT_TABLE_COLUMNS = [
+  { label: "Name", width: "12%" },
+  { label: "Type", width: "12%" },
+  { label: "Summary", width: "53%" },
+  { label: "Schedule", width: "20%" },
+];
 
 const state = {
   controller: null,
@@ -18,7 +38,7 @@ const state = {
   canvases: [],
   effectCatalog: [],
   filter: "",
-  sortKey: "canvasName",
+  sortKey: "name",
   sortDirection: "asc",
   refreshMs: DEFAULT_REFRESH_MS,
   autoRefresh: true,
@@ -26,13 +46,18 @@ const state = {
   requestInFlight: false,
   lastUpdatedAt: null,
   connected: false,
+  dirty: false,
+  expandedCanvasIds: new Set(),
+  sectionExpansions: {},
+  selectedFeatures: {},  // { canvasId: Set<featureId> }
+  selectedEffects: {},   // { canvasId: Set<effectIndex> }
+  selectedCanvases: new Set(),
   dialogs: {
     canvasMode: "create",
     canvasId: null,
     featureMode: "create",
     featureCanvasId: null,
     featureId: null,
-    effectsCanvasId: null,
     effectMode: "create",
     effectCanvasId: null,
     effectIndex: null,
@@ -47,32 +72,50 @@ document.addEventListener("DOMContentLoaded", async () => {
   buildScheduleDayInputs();
   bindEvents();
   syncControls();
+
   try {
     await ensureEffectCatalog();
   } catch (error) {
     console.error(error);
   }
+
   refreshLoop(true);
 });
 
 function bindElements() {
   elements.filterInput = document.getElementById("filterInput");
-  elements.refreshIntervalSelect = document.getElementById("refreshIntervalSelect");
+  elements.refreshIntervalButton = document.getElementById("refreshIntervalButton");
+  elements.refreshDropdownToggle = document.getElementById("refreshDropdownToggle");
+  elements.refreshDropdownMenu = document.getElementById("refreshDropdownMenu");
+  document.body.appendChild(elements.refreshDropdownMenu);
   elements.autoRefreshToggle = document.getElementById("autoRefreshToggle");
   elements.refreshButton = document.getElementById("refreshButton");
   elements.startAllButton = document.getElementById("startAllButton");
   elements.stopAllButton = document.getElementById("stopAllButton");
-  elements.newCanvasButton = document.getElementById("newCanvasButton");
+  elements.newConfigButton = document.getElementById("newConfigButton");
+  elements.loadConfigButton = document.getElementById("loadConfigButton");
+  elements.loadDropdownToggle = document.getElementById("loadDropdownToggle");
+  elements.loadDropdownMenu = document.getElementById("loadDropdownMenu");
+  document.body.appendChild(elements.loadDropdownMenu);
+  elements.saveConfigButton = document.getElementById("saveConfigButton");
+  elements.configFileInput = document.getElementById("configFileInput");
+
+  elements.collisionDialog = document.getElementById("collisionDialog");
+  elements.collisionDialogTitle = document.getElementById("collisionDialogTitle");
+  elements.collisionDialogCopy = document.getElementById("collisionDialogCopy");
+  elements.collisionRepeatCheckbox = document.getElementById("collisionRepeatCheckbox");
+  elements.collisionYesButton = document.getElementById("collisionYesButton");
+  elements.collisionNoButton = document.getElementById("collisionNoButton");
+
 
   elements.connectionStatus = document.getElementById("connectionStatus");
   elements.connectionStatusText = document.getElementById("connectionStatusText");
   elements.apiPortValue = document.getElementById("apiPortValue");
   elements.webPortValue = document.getElementById("webPortValue");
-  elements.lastUpdatedText = document.getElementById("lastUpdatedText");
+
   elements.tableMetaText = document.getElementById("tableMetaText");
-  elements.canvasMetaText = document.getElementById("canvasMetaText");
-  elements.metricsTableBody = document.getElementById("metricsTableBody");
-  elements.canvasList = document.getElementById("canvasList");
+  elements.canvasTableBody = document.getElementById("canvasTableBody");
+  elements.canvasFolderTab = document.getElementById("canvasFolderTab");
   elements.sortButtons = Array.from(document.querySelectorAll(".sort-button"));
 
   elements.summaryCanvases = document.getElementById("summaryCanvases");
@@ -137,15 +180,6 @@ function bindElements() {
   elements.featureReversedInput = document.getElementById("featureReversedInput");
   elements.featureRedGreenSwapInput = document.getElementById("featureRedGreenSwapInput");
 
-  elements.effectsDialog = document.getElementById("effectsDialog");
-  elements.effectsDialogEyebrow = document.getElementById("effectsDialogEyebrow");
-  elements.effectsDialogTitle = document.getElementById("effectsDialogTitle");
-  elements.effectsDialogCopy = document.getElementById("effectsDialogCopy");
-  elements.effectsDialogMessage = document.getElementById("effectsDialogMessage");
-  elements.effectsList = document.getElementById("effectsList");
-  elements.addEffectButton = document.getElementById("addEffectButton");
-  elements.currentEffectSelect = document.getElementById("currentEffectSelect");
-
   elements.effectDialog = document.getElementById("effectDialog");
   elements.effectForm = document.getElementById("effectForm");
   elements.effectDialogEyebrow = document.getElementById("effectDialogEyebrow");
@@ -170,10 +204,13 @@ function bindEvents() {
     render();
   });
 
-  elements.refreshIntervalSelect.addEventListener("change", (event) => {
-    state.refreshMs = Number(event.target.value) || DEFAULT_REFRESH_MS;
-    saveSettings();
-    restartRefreshTimer();
+  elements.refreshDropdownToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleRefreshDropdown();
+  });
+  elements.refreshDropdownMenu.addEventListener("click", (e) => {
+    e.stopPropagation();
+    handleRefreshDropdownClick(e);
   });
 
   elements.autoRefreshToggle.addEventListener("change", (event) => {
@@ -185,7 +222,31 @@ function bindEvents() {
   elements.refreshButton.addEventListener("click", () => refreshLoop(true));
   elements.startAllButton.addEventListener("click", () => postCanvasAction("/api/canvases/start"));
   elements.stopAllButton.addEventListener("click", () => postCanvasAction("/api/canvases/stop"));
-  elements.newCanvasButton.addEventListener("click", () => openCanvasDialog("create"));
+  elements.newConfigButton.addEventListener("click", handleNewConfig);
+  elements.loadConfigButton.addEventListener("click", handleLoadConfig);
+  elements.loadDropdownToggle.addEventListener("click", (e) => { e.stopPropagation(); toggleLoadDropdown(); });
+  elements.loadDropdownMenu.addEventListener("click", (e) => { e.stopPropagation(); handleLoadDropdownClick(e); });
+  elements.saveConfigButton.addEventListener("click", handleSaveConfig);
+  elements.configFileInput.addEventListener("change", handleConfigFileSelected);
+  document.addEventListener("click", () => {
+    elements.loadDropdownMenu.classList.remove('open');
+    elements.refreshDropdownMenu.classList.remove('open');
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+      const active = document.activeElement;
+      if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable)) return;
+      e.preventDefault();
+      if (state.selectedCanvases.size === state.canvases.length && state.canvases.length > 0) {
+        state.selectedCanvases.clear();
+      } else {
+        state.canvases.forEach((c) => state.selectedCanvases.add(c.id));
+      }
+      render();
+    }
+  });
+
 
   elements.sortButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -206,15 +267,15 @@ function bindEvents() {
     });
   });
 
-  elements.metricsTableBody.addEventListener("click", handleActionClick);
-  elements.canvasList.addEventListener("click", handleActionClick);
-  elements.effectsList.addEventListener("click", handleActionClick);
+  elements.canvasTableBody.addEventListener("click", handleActionClick);
+  elements.canvasTableBody.addEventListener("change", handleTableChange);
+  elements.canvasFolderTab.addEventListener("click", handleActionClick);
 
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => closeDialog(button.dataset.closeDialog));
   });
 
-  [elements.canvasDialog, elements.featureDialog, elements.effectsDialog, elements.effectDialog].forEach((dialog) => {
+  [elements.canvasDialog, elements.featureDialog, elements.effectDialog].forEach((dialog) => {
     dialog.addEventListener("close", () => clearDialogMessage(dialog));
   });
 
@@ -230,40 +291,17 @@ function bindEvents() {
   elements.canvasWidthInput.addEventListener("change", syncSeedFeatureDimensions);
   elements.canvasHeightInput.addEventListener("change", syncSeedFeatureDimensions);
 
-  elements.addEffectButton.addEventListener("click", () => {
-    if (state.dialogs.effectsCanvasId !== null) {
-      openEffectDialog("create", state.dialogs.effectsCanvasId);
-    }
-  });
-
-  elements.currentEffectSelect.addEventListener("change", async (event) => {
-    const canvasId = state.dialogs.effectsCanvasId;
-    if (canvasId === null) {
+  elements.effectTypeInput.addEventListener("change", () => {
+    const definition = getEffectDefinition(elements.effectTypeInput.value);
+    if (!definition) {
       return;
     }
 
-    try {
-      const currentIndex = Number(event.target.value);
-      await saveCanvasMutation(canvasId, (canvas) => {
-        ensureEffectsManager(canvas);
-        canvas.effectsManager.currentEffectIndex = currentIndex;
-      });
-      await refreshLoop(true);
-      renderEffectsDialog();
-    } catch (error) {
-      console.error(error);
-      setDialogMessage(elements.effectsDialog, error instanceof Error ? error.message : String(error));
+    if (!elements.effectNameInput.value || state.dialogs.effectMode === "create") {
+      elements.effectNameInput.value = definition.label;
     }
-  });
 
-  elements.effectTypeInput.addEventListener("change", () => {
-    const definition = getEffectDefinition(elements.effectTypeInput.value);
-    if (definition) {
-      if (!elements.effectNameInput.value || state.dialogs.effectMode === "create") {
-        elements.effectNameInput.value = definition.label;
-      }
-      renderEffectFields(createEffectDraft(definition.type));
-    }
+    renderEffectFields(createEffectDraft(definition.type));
   });
 }
 
@@ -287,10 +325,9 @@ async function ensureEffectCatalog() {
 }
 
 function populateEffectTypeOptions() {
-  const options = state.effectCatalog
+  elements.effectTypeInput.innerHTML = state.effectCatalog
     .map((definition) => `<option value="${escapeAttribute(definition.type)}">${escapeHtml(definition.label)}</option>`)
     .join("");
-  elements.effectTypeInput.innerHTML = options;
 }
 
 function loadSettings() {
@@ -325,7 +362,7 @@ function saveSettings() {
 
 function syncControls() {
   elements.filterInput.value = state.filter;
-  elements.refreshIntervalSelect.value = String(state.refreshMs);
+  updateRefreshButtonLabel();
   elements.autoRefreshToggle.checked = state.autoRefresh;
 }
 
@@ -346,7 +383,7 @@ async function refreshLoop(force) {
   }
 
   state.requestInFlight = true;
-  setBusy(true);
+  if (force) setBusy(true);
 
   try {
     const requests = [fetchJson("/api/controller")];
@@ -366,6 +403,7 @@ async function refreshLoop(force) {
     state.rows = buildRows(state.canvases);
     state.lastUpdatedAt = new Date();
     state.connected = true;
+    pruneExpandedSet();
     render();
     syncOpenDialogs();
   } catch (error) {
@@ -374,7 +412,7 @@ async function refreshLoop(force) {
     renderError(error);
   } finally {
     state.requestInFlight = false;
-    setBusy(false);
+    if (force) setBusy(false);
     restartRefreshTimer();
   }
 }
@@ -395,6 +433,262 @@ async function postCanvasAction(endpoint, canvasIds) {
     renderError(error);
   } finally {
     setBusy(false);
+  }
+}
+
+function confirmDestructiveAction(message) {
+  if (!state.dirty) return true;
+  return confirm(message);
+}
+
+async function handleNewConfig() {
+  if (!confirmDestructiveAction("All unsaved changes will be lost. Create a new empty configuration?")) {
+    return;
+  }
+
+  setBusy(true);
+  try {
+    await fetchJson("/api/controller/reset", { method: "POST" });
+    state.dirty = false;
+    state.expandedCanvasIds.clear();
+    state.selectedCanvases.clear();
+    state.selectedFeatures = {};
+    state.selectedEffects = {};
+    state.sectionExpansions = {};
+    await refreshLoop(true);
+  } catch (error) {
+    console.error(error);
+    renderError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function handleLoadConfig() {
+  state.loadMode = "load";
+  elements.configFileInput.value = "";
+  elements.configFileInput.click();
+}
+
+function positionMenuAtButton(menu, button) {
+  menu.classList.add('open');
+  const rect = button.getBoundingClientRect();
+  const menuWidth = menu.offsetWidth;
+  menu.style.top  = (rect.bottom + 4) + 'px';
+  menu.style.left = (rect.right - menuWidth) + 'px';
+}
+
+function toggleLoadDropdown() {
+  const menu = elements.loadDropdownMenu;
+  const wasHidden = !menu.classList.contains('open');
+  elements.refreshDropdownMenu.classList.remove('open');
+  if (wasHidden) {
+    positionMenuAtButton(menu, elements.loadDropdownToggle);
+  } else {
+    menu.classList.remove('open');
+  }
+}
+
+function toggleRefreshDropdown() {
+  const menu = elements.refreshDropdownMenu;
+  const wasHidden = !menu.classList.contains('open');
+  elements.loadDropdownMenu.classList.remove('open');
+  if (wasHidden) {
+    positionMenuAtButton(menu, elements.refreshDropdownToggle);
+  } else {
+    menu.classList.remove('open');
+  }
+}
+
+function handleRefreshDropdownClick(event) {
+  const item = event.target.closest('[data-interval]');
+  if (!item) return;
+  elements.refreshDropdownMenu.classList.remove('open');
+  state.refreshMs = Number(item.dataset.interval) || DEFAULT_REFRESH_MS;
+  saveSettings();
+  restartRefreshTimer();
+  updateRefreshButtonLabel();
+}
+
+const INTERVAL_LABELS = { 1000: '1 sec', 2000: '2 sec', 5000: '5 sec', 10000: '10 sec' };
+function updateRefreshButtonLabel() {
+  elements.refreshIntervalButton.textContent = '\u23F1 ' + (INTERVAL_LABELS[state.refreshMs] || (state.refreshMs / 1000) + ' sec');
+}
+
+function handleLoadDropdownClick(event) {
+  const item = event.target.closest("[data-load-mode]");
+  if (!item) return;
+  elements.loadDropdownMenu.classList.remove('open');
+  state.loadMode = item.dataset.loadMode;
+  elements.configFileInput.value = "";
+  elements.configFileInput.click();
+}
+
+function normalizeImportedControllerConfig(json) {
+  const payload = json?.controller || json;
+
+  if (Array.isArray(payload)) {
+    return { canvases: payload };
+  }
+
+  if (payload && typeof payload === "object") {
+    return payload;
+  }
+
+  throw new Error("Configuration must be a controller object or an array of canvases.");
+}
+
+async function handleConfigFileSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const mode = state.loadMode || "load";
+  console.log(`[${mode}] File selected:`, file.name, file.size, "bytes");
+
+  setBusy(true);
+  try {
+    const text = await file.text();
+    const json = JSON.parse(text);
+    const payload = normalizeImportedControllerConfig(json);
+    const incomingCanvases = Array.isArray(payload.canvases) ? payload.canvases : [];
+    console.log(`[${mode}] Parsed OK, canvases:`, incomingCanvases.length);
+
+    if (incomingCanvases.length === 0) {
+      alert(`The selected file contains 0 canvases.\n\nFile: ${file.name}`);
+      return;
+    }
+
+    if (mode === "insert") {
+      await insertCanvases(incomingCanvases);
+    } else {
+      await fetchJson("/api/controller", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      console.log("[Load] PUT succeeded");
+      state.dirty = false;
+    }
+
+    state.expandedCanvasIds.clear();
+    state.selectedCanvases.clear();
+    state.selectedFeatures = {};
+    state.selectedEffects = {};
+    state.sectionExpansions = {};
+    await refreshLoop(true);
+    console.log(`[${mode}] Refresh complete, canvases:`, state.canvases.length);
+  } catch (error) {
+    console.error(`[${mode}] Error:`, error);
+    alert(`Failed to ${mode} configuration: ` + (error instanceof Error ? error.message : String(error)));
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function insertCanvases(incomingCanvases) {
+  // Find insertion index: position of first selected canvas, or end of list
+  let insertIdx = state.canvases.length;
+  if (state.selectedCanvases.size > 0) {
+    const idx = state.canvases.findIndex((c) => state.selectedCanvases.has(c.id));
+    if (idx >= 0) insertIdx = idx;
+  }
+
+  const existingByName = new Map(
+    state.canvases.map((c, i) => [(c.name || "").toLowerCase(), { canvas: c, index: i }])
+  );
+
+  let repeatAnswer = null;
+  const toInsert = [];           // new canvases to splice in at insertIdx
+  const toOverwrite = new Map(); // index -> replacement canvas data
+
+  for (const incoming of incomingCanvases) {
+    const name = incoming.name || "Unnamed";
+    const match = existingByName.get(name.toLowerCase());
+
+    if (match) {
+      let overwrite;
+      if (repeatAnswer !== null) {
+        overwrite = repeatAnswer;
+      } else {
+        const result = await showCollisionDialog(name);
+        overwrite = result.overwrite;
+        if (result.repeat) repeatAnswer = overwrite;
+      }
+
+      if (!overwrite) {
+        console.log(`[Insert] Skipping duplicate: ${name}`);
+        continue;
+      }
+
+      // Replace in-place at the existing position
+      toOverwrite.set(match.index, incoming);
+      console.log(`[Insert] Will overwrite canvas: ${name}`);
+    } else {
+      toInsert.push(incoming);
+      existingByName.set(name.toLowerCase(), { canvas: incoming, index: -1 });
+      console.log(`[Insert] Will add canvas: ${name}`);
+    }
+  }
+
+  // Build the merged canvas array
+  const merged = state.canvases.map((c, i) => toOverwrite.has(i) ? toOverwrite.get(i) : c);
+  merged.splice(insertIdx, 0, ...toInsert);
+
+  // PUT the entire controller with the merged order
+  await fetchJson("/api/controller", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ canvases: merged }),
+  });
+
+  state.dirty = true;
+  console.log(`[Insert] PUT complete — ${toInsert.length} added at index ${insertIdx}, ${toOverwrite.size} overwritten`);
+}
+
+function showCollisionDialog(canvasName) {
+  return new Promise((resolve) => {
+    elements.collisionDialogTitle.textContent = `Duplicate: ${canvasName}`;
+    elements.collisionDialogCopy.textContent =
+      `A canvas named "${canvasName}" already exists. Overwrite it with the imported version?`;
+    elements.collisionRepeatCheckbox.checked = false;
+
+    function cleanup() {
+      elements.collisionYesButton.removeEventListener("click", onYes);
+      elements.collisionNoButton.removeEventListener("click", onNo);
+      elements.collisionDialog.close();
+    }
+    function onYes() {
+      cleanup();
+      resolve({ overwrite: true, repeat: elements.collisionRepeatCheckbox.checked });
+    }
+    function onNo() {
+      cleanup();
+      resolve({ overwrite: false, repeat: elements.collisionRepeatCheckbox.checked });
+    }
+
+    elements.collisionYesButton.addEventListener("click", onYes);
+    elements.collisionNoButton.addEventListener("click", onNo);
+    elements.collisionDialog.showModal();
+  });
+}
+
+async function handleSaveConfig() {
+  try {
+    const data = await fetchJson("/api/controller");
+    const controller = data.controller || data;
+    const blob = new Blob([JSON.stringify(controller, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "config.led";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    state.dirty = false;
+  } catch (error) {
+    console.error(error);
+    alert("Failed to save configuration: " + (error instanceof Error ? error.message : String(error)));
   }
 }
 
@@ -422,49 +716,25 @@ function buildRows(canvases) {
       const featureFps = isConnected && stats ? Number(stats.fpsDrawing || 0) : null;
       const canvasFps = Number(canvas?.effectsManager?.fps || 0);
       const queueDepth = Number.isFinite(feature.queueDepth) ? feature.queueDepth : null;
-      const queueMaxSize = Number.isFinite(feature.queueMaxSize) ? feature.queueMaxSize : QUEUE_VISUAL_MAX;
-      const bufferPos = isConnected && stats && Number.isFinite(stats.bufferPos) ? Number(stats.bufferPos) : null;
-      const bufferSize = isConnected && stats && Number.isFinite(stats.bufferSize) ? Number(stats.bufferSize) : null;
-      const bufferRatio = bufferPos !== null && bufferSize ? bufferPos / Math.max(bufferSize, 1) : null;
       const currentClock = isConnected && stats && Number.isFinite(stats.currentClock) ? Number(stats.currentClock) : null;
       const deltaSeconds = currentClock !== null ? currentClock - nowSeconds : null;
-      const wifiSignalRaw = isConnected && stats && Number.isFinite(stats.wifiSignal) ? Number(stats.wifiSignal) : null;
-      const wifiSignalAbs = wifiSignalRaw !== null ? Math.abs(wifiSignalRaw) : null;
       const bandwidth = Number.isFinite(feature.bytesPerSecond) ? Number(feature.bytesPerSecond) : 0;
-      const flashVersion = isConnected && stats && stats.flashVersion !== undefined ? String(stats.flashVersion) : "";
       const sizeSort = Number(feature.width || 0) * Number(feature.height || 0);
-      const sizeText = `${feature.width || 0}x${feature.height || 0}`;
-      const effectName = String(canvas.currentEffectName || "---");
-      const index = [canvas.name, feature.friendlyName, feature.hostName, effectName].join(" ").toLowerCase();
-
       rows.push({
-        id: `${canvas.id}:${feature.id}`,
         canvasId: Number(canvas.id || 0),
         featureId: Number(feature.id || 0),
         canvasName: String(canvas.name || ""),
         featureName: String(feature.friendlyName || ""),
         hostName: String(feature.hostName || ""),
-        sizeText,
-        sizeSort,
+        currentEffectName: String(canvas.currentEffectName || "---"),
         reconnectCount,
-        canvasFps,
         featureFps,
+        canvasFps,
         queueDepth,
-        queueMaxSize,
-        bufferPos,
-        bufferSize,
-        bufferRatio,
-        wifiSignalAbs,
-        wifiSignalText: formatWifiSignal(wifiSignalRaw),
         bandwidth,
         deltaSeconds,
-        flashVersion,
-        flashVersionSort: flashVersion ? Number.parseFloat(flashVersion) || 0 : -1,
-        statusText: isConnected ? "ONLINE" : "OFFLINE",
-        statusSort: isConnected ? 1 : 0,
+        sizeSort,
         isConnected,
-        currentEffectName: effectName,
-        index,
       });
     });
   });
@@ -476,7 +746,6 @@ function render() {
   renderConnectionStatus();
   renderSummary();
   renderTable();
-  renderCanvasCards();
   updateSortButtons();
 }
 
@@ -484,15 +753,13 @@ function renderConnectionStatus() {
   const controller = state.controller || {};
   elements.apiPortValue.textContent = controller.port ?? "--";
   elements.webPortValue.textContent = controller.webuiport ?? "--";
-
   elements.connectionStatus.classList.toggle("online", state.connected);
   elements.connectionStatus.classList.toggle("offline", !state.connected);
   elements.connectionStatusText.textContent = state.connected
-    ? `Live telemetry | ${state.rows.length} feature rows`
+    ? `Live telemetry | ${state.canvases.length} canvases`
     : "API unavailable";
 
   if (state.lastUpdatedAt) {
-    elements.lastUpdatedText.textContent = `Last sample ${formatTimestamp(state.lastUpdatedAt)} | every ${state.refreshMs / 1000}s`;
   }
 }
 
@@ -543,179 +810,289 @@ function renderSummary() {
 }
 
 function renderTable() {
-  const filteredRows = state.rows.filter((row) => !state.filter || row.index.includes(state.filter.toLowerCase()));
-  const sortedRows = filteredRows.slice().sort(compareRows);
-  elements.tableMetaText.textContent = `${sortedRows.length} visible rows`;
+  const visibleCanvases = state.canvases
+    .filter(matchesCanvasFilter)
+    .slice()
+    .sort(compareCanvases);
 
-  if (!sortedRows.length) {
-    elements.metricsTableBody.innerHTML = '<tr><td colspan="14" class="empty-cell">No matching canvases or features.</td></tr>';
+  elements.tableMetaText.textContent = `${visibleCanvases.length} visible canvas${visibleCanvases.length === 1 ? "" : "es"}`;
+
+  if (!visibleCanvases.length) {
+    elements.canvasTableBody.innerHTML = '<tr><td colspan="9" class="empty-cell">No matching canvases.</td></tr>';
+    elements.canvasFolderTab.innerHTML = renderCanvasFolderTab();
     return;
   }
 
-  elements.metricsTableBody.innerHTML = sortedRows.map((row) => {
-    const fpsStatus = classifyFps(row);
-    const queueStatus = classifyQueue(row);
-    const bufferStatus = classifyBuffer(row);
-    const signalStatus = classifySignal(row);
-    const deltaStatus = classifyDelta(row);
+  elements.canvasTableBody.innerHTML = visibleCanvases.map((canvas) => renderCanvasRows(canvas)).join("");
+  elements.canvasFolderTab.innerHTML = renderCanvasFolderTab();
+}
 
-    return `
+function renderCanvasRows(canvas) {
+  const canvasId = Number(canvas.id || 0);
+  const expanded = state.expandedCanvasIds.has(canvasId);
+  const sections = ensureSectionExpansion(canvasId);
+  const features = Array.isArray(canvas.features) ? canvas.features : [];
+  const effects = Array.isArray(canvas?.effectsManager?.effects) ? canvas.effectsManager.effects : [];
+  const targetFps = Number(canvas?.effectsManager?.fps || 0);
+  const canvasStatus = classifyCanvasStatus(canvas);
+  const isSelected = state.selectedCanvases.has(canvasId);
+
+  return `
+    <tr class="canvas-main-row${isSelected ? " selected" : ""}">
+      <td class="checkbox-cell">
+        <input type="checkbox" class="row-checkbox" data-action="toggle-canvas-select" data-canvas-id="${canvasId}" ${isSelected ? "checked" : ""}>
+      </td>
+      <td class="expander-column">
+        <button class="expand-button" type="button" data-action="toggle-expand" data-canvas-id="${canvasId}" aria-label="${expanded ? "Collapse" : "Expand"} canvas">
+          ${expanded ? "v" : ">"}
+        </button>
+      </td>
+      <td>
+        <div class="canvas-name">
+          <span>${escapeHtml(canvas.name || "Unnamed Canvas")}</span>
+        </div>
+      </td>
+      <td class="mono">${Number(canvas.width || 0)}x${Number(canvas.height || 0)}</td>
+      <td>${features.length}</td>
+      <td>${effects.length}</td>
+      <td>${escapeHtml(canvas.currentEffectName || "No Effect Selected")}</td>
+      <td class="mono">${targetFps}</td>
+      <td><span class="status-chip ${canvasStatus.className}">${canvasStatus.label}</span></td>
+    </tr>
+    ${expanded ? `
       <tr>
-        <td class="label-strong"><button class="entity-button" type="button" data-action="edit-canvas" data-canvas-id="${row.canvasId}">${escapeHtml(row.canvasName)}</button></td>
-        <td><button class="entity-button" type="button" data-action="edit-feature" data-canvas-id="${row.canvasId}" data-feature-id="${row.featureId}">${escapeHtml(row.featureName)}</button></td>
-        <td class="mono">${escapeHtml(row.hostName)}</td>
-        <td class="mono">${escapeHtml(row.sizeText)}</td>
-        <td class="${statusClassForReconnect(row.reconnectCount)}">${formatReconnect(row.reconnectCount)}</td>
-        <td>${renderFpsCell(row, fpsStatus)}</td>
-        <td class="progress-cell">${renderQueueCell(row, queueStatus)}</td>
-        <td class="progress-cell">${renderBufferCell(row, bufferStatus)}</td>
-        <td class="${signalStatus}">${escapeHtml(row.wifiSignalText)}</td>
-        <td class="mono">${row.isConnected ? formatBandwidth(row.bandwidth) : "--"}</td>
-        <td class="delta-cell">${renderDeltaCell(row, deltaStatus)}</td>
-        <td class="mono">${row.flashVersion ? `v${escapeHtml(row.flashVersion)}` : "--"}</td>
-        <td><span class="status-chip ${row.isConnected ? "good" : "danger"}">${row.statusText}</span></td>
-        <td title="${escapeHtml(row.currentEffectName)}"><button class="entity-button subtle" type="button" data-action="edit-effects" data-canvas-id="${row.canvasId}">${escapeHtml(row.currentEffectName)}</button></td>
+        <td colspan="9" class="detail-cell">
+          <div class="detail-shell">
+            <div class="detail-stack">
+              <section class="nested-card card-yellow">
+                ${renderSectionHeaderRow({
+                  canvasId,
+                  section: "features",
+                  expanded: sections.features,
+                  title: `Features (${features.length})`,
+                  firstColumnWidth: NESTED_PRIMARY_COLUMN_WIDTH,
+                  columns: FEATURE_TABLE_COLUMNS,
+                })}
+                ${sections.features ? `
+                  <div class="table-wrap nested-table-wrap">
+                    <table class="nested-table">
+                      ${renderNestedColgroup(NESTED_PRIMARY_COLUMN_WIDTH, FEATURE_TABLE_COLUMNS)}
+                      <tbody>
+                        ${renderFeaturesTable(canvas)}
+                      </tbody>
+                    </table>
+                  </div>
+                  ${renderFolderTab(canvasId, "feature", features.length)}
+                ` : ""}
+              </section>
+              <section class="nested-card card-cyan">
+                ${renderSectionHeaderRow({
+                  canvasId,
+                  section: "effects",
+                  expanded: sections.effects,
+                  title: `Effects (${effects.length})`,
+                  firstColumnWidth: NESTED_PRIMARY_COLUMN_WIDTH,
+                  columns: EFFECT_TABLE_COLUMNS,
+                })}
+                ${sections.effects ? `
+                  <div class="table-wrap nested-table-wrap">
+                    <table class="nested-table">
+                      ${renderNestedColgroup(NESTED_PRIMARY_COLUMN_WIDTH, EFFECT_TABLE_COLUMNS)}
+                      <tbody>
+                        ${renderEffectsTable(canvas)}
+                      </tbody>
+                    </table>
+                  </div>
+                  ${renderFolderTab(canvasId, "effect", effects.length)}
+                ` : ""}
+              </section>
+            </div>
+          </div>
+        </td>
+      </tr>
+    ` : ""}
+  `;
+}
+
+function renderFeaturesTable(canvas) {
+  const features = Array.isArray(canvas.features) ? canvas.features : [];
+  const canvasId = Number(canvas.id || 0);
+  const selected = state.selectedFeatures[canvasId] || new Set();
+
+  if (!features.length) {
+    return `<tr><td colspan="${FEATURE_TABLE_COLUMNS.length + 1}" class="empty-cell">No features configured.</td></tr>`;
+  }
+
+  return features.map((feature) => {
+    const featureId = Number(feature.id || 0);
+    const isSelected = selected.has(featureId);
+    return `
+    <tr class="selectable-row ${isSelected ? "selected" : ""}" data-canvas-id="${canvasId}" data-feature-id="${featureId}">
+      <td class="checkbox-cell">
+        <input type="checkbox" class="row-checkbox" data-action="toggle-feature-select" data-canvas-id="${canvasId}" data-feature-id="${featureId}" ${isSelected ? "checked" : ""}>
+      </td>
+      <td>${escapeHtml(feature.friendlyName || `Feature ${feature.id}`)}</td>
+      <td class="mono">${escapeHtml(feature.hostName || "--")}</td>
+      <td class="mono align-right">${Number(feature.port || 0)}</td>
+      <td class="mono align-right">${Number(feature.width || 0)}</td>
+      <td class="mono align-right">${Number(feature.height || 0)}</td>
+      <td class="mono align-right">${Number(feature.offsetX || 0)}</td>
+      <td class="mono align-right">${Number(feature.offsetY || 0)}</td>
+      <td class="mono align-right">${Number(feature.channel || 0)}</td>
+      <td>${renderQueueMeter(feature)}</td>
+      <td>${renderBufferMeter(feature)}</td>
+      <td><span class="status-chip ${feature.isConnected ? "good" : "danger"}">${feature.isConnected ? "ONLINE" : "OFFLINE"}</span></td>
+    </tr>
+  `;
+  }).join("");
+}
+
+function renderSectionHeaderRow({ canvasId, section, expanded, title, firstColumnWidth, columns }) {
+  // The toggle spans the checkbox column (firstColumnWidth) + the Name column (columns[0])
+  const toggleWidth = `calc(${firstColumnWidth} + ${columns[0].width})`;
+  const remainingColumns = columns.slice(1);
+  const templateColumns = [toggleWidth, ...remainingColumns.map((column) => column.width)].join(" ");
+  return `
+    <div class="section-header-grid" style="grid-template-columns:${templateColumns}">
+      <button
+        class="section-toggle"
+        type="button"
+        data-action="toggle-section"
+        data-canvas-id="${canvasId}"
+        data-section="${section}"
+        aria-expanded="${expanded ? "true" : "false"}"
+      >
+        <span class="section-toggle-icon">${expanded ? "v" : ">"}</span>
+        <span>${escapeHtml(title)}</span>
+      </button>
+      ${remainingColumns.map((column) => `<div class="section-header-cell${column.align === "right" ? " align-right" : ""}">${escapeHtml(column.label)}</div>`).join("")}
+    </div>
+  `;
+}
+
+function renderNestedColgroup(firstColumnWidth, columns) {
+  return `
+    <colgroup>
+      <col style="width:${firstColumnWidth}">
+      ${columns.map((column) => `<col style="width:${column.width}">`).join("")}
+    </colgroup>
+  `;
+}
+
+function renderEffectsTable(canvas) {
+  const effects = Array.isArray(canvas?.effectsManager?.effects) ? canvas.effectsManager.effects : [];
+  const canvasId = Number(canvas.id || 0);
+  const selected = state.selectedEffects[canvasId] || new Set();
+  const currentEffectIndex = Number.isInteger(canvas?.effectsManager?.currentEffectIndex)
+    ? canvas.effectsManager.currentEffectIndex
+    : -1;
+
+  if (!effects.length) {
+    return `<tr><td colspan="${EFFECT_TABLE_COLUMNS.length + 1}" class="empty-cell">No effects configured.</td></tr>`;
+  }
+
+  return effects.map((effect, index) => {
+    const definition = getEffectDefinition(effect.type);
+    const isSelected = selected.has(index);
+    return `
+      <tr class="selectable-row ${isSelected ? "selected" : ""}" data-canvas-id="${canvasId}" data-effect-index="${index}">
+        <td class="checkbox-cell">
+          <input type="checkbox" class="row-checkbox" data-action="toggle-effect-select" data-canvas-id="${canvasId}" data-effect-index="${index}" ${isSelected ? "checked" : ""}>
+        </td>
+        <td>${escapeHtml(effect.name || `Effect ${index + 1}`)}${index === currentEffectIndex ? ' <span class="status-chip good">CURRENT</span>' : ""}</td>
+        <td>${escapeHtml(definition ? definition.label : effect.type || "Unknown")}</td>
+        <td title="${escapeAttribute(summarizeEffect(effect, definition))}">${escapeHtml(summarizeEffect(effect, definition))}</td>
+        <td>${escapeHtml(formatSchedule(effect.schedule))}</td>
       </tr>
     `;
   }).join("");
 }
 
-function renderCanvasCards() {
-  const canvases = state.canvases.slice().sort((left, right) => String(left.name).localeCompare(String(right.name)));
-  elements.canvasMetaText.textContent = `${canvases.length} configured`;
+function renderCanvasFolderTab() {
+  const selectedCount = state.selectedCanvases.size;
+  const canEdit = selectedCount === 1;
+  const canDelete = selectedCount >= 1;
+  const selectedId = canEdit ? Array.from(state.selectedCanvases)[0] : null;
 
-  if (!canvases.length) {
-    elements.canvasList.innerHTML = '<div class="canvas-empty">No canvases loaded.</div>';
-    return;
-  }
-
-  elements.canvasList.innerHTML = canvases.map((canvas) => {
-    const features = Array.isArray(canvas.features) ? canvas.features : [];
-    const featureCount = features.length;
-    const onlineCount = features.filter((feature) => feature.isConnected).length;
-    const bandwidth = features.reduce((sum, feature) => sum + Number(feature.bytesPerSecond || 0), 0);
-    const queueDepth = features.reduce((max, feature) => Math.max(max, Number(feature.queueDepth || 0)), 0);
-    const filterValue = [canvas.name, canvas.currentEffectName].join(" ");
-    const featureButtons = features.length
-      ? features.map((feature) => `
-          <button class="feature-chip" type="button" data-action="edit-feature" data-canvas-id="${canvas.id}" data-feature-id="${feature.id}">
-            ${escapeHtml(feature.friendlyName || `Feature ${feature.id}`)}
-          </button>
-        `).join("")
-      : '<span class="muted">No features configured.</span>';
-
-    return `
-      <div class="canvas-card">
-        <div class="canvas-card-header">
-          <div>
-            <div class="canvas-kicker">Canvas ${canvas.id}</div>
-            <h3><button class="entity-button card-link" type="button" data-action="edit-canvas" data-canvas-id="${canvas.id}">${escapeHtml(canvas.name || "Unnamed")}</button></h3>
-          </div>
-          <div class="canvas-pill">${onlineCount}/${featureCount} online</div>
-        </div>
-        <div class="canvas-stats">
-          <span>${canvas.width || 0} x ${canvas.height || 0}</span>
-          <span>${featureCount} feature${featureCount === 1 ? "" : "s"}</span>
-          <span>${Number(canvas?.effectsManager?.fps || 0)} fps target</span>
-        </div>
-        <div class="canvas-meta">
-          <span>Effect <strong class="label-strong">${escapeHtml(canvas.currentEffectName || "---")}</strong></span>
-          <span>Bandwidth <strong class="label-strong">${formatBandwidth(bandwidth)}</strong></span>
-          <span>Queue <strong class="label-strong">${queueDepth}</strong></span>
-        </div>
-        <div class="feature-chip-strip">${featureButtons}</div>
-        <div class="canvas-actions">
-          <button class="action-button accent" type="button" data-action="start" data-canvas-id="${canvas.id}">Start</button>
-          <button class="action-button warning" type="button" data-action="stop" data-canvas-id="${canvas.id}">Stop</button>
-          <button class="action-button" type="button" data-action="edit-effects" data-canvas-id="${canvas.id}">Effects</button>
-          <button class="action-button" type="button" data-action="add-feature" data-canvas-id="${canvas.id}">Add Feature</button>
-          <button class="action-button" type="button" data-action="filter" data-canvas-id="${canvas.id}" data-filter="${escapeAttribute(filterValue)}">Focus</button>
-          <button class="action-button" type="button" data-action="delete-canvas" data-canvas-id="${canvas.id}">Delete</button>
-        </div>
-      </div>
-    `;
-  }).join("");
+  return `
+    <div class="folder-tab folder-tab-green">
+      <a href="#" class="folder-tab-action" data-action="add-canvas">&#x2795; New</a>
+      <span class="folder-tab-sep">&#x2502;</span>
+      <a href="#" class="folder-tab-action ${canEdit ? "" : "disabled"}" 
+         ${canEdit ? `data-action="edit-canvas" data-canvas-id="${selectedId}"` : ""}>
+        &#x270E; Edit
+      </a>
+      <span class="folder-tab-sep">&#x2502;</span>
+      <a href="#" class="folder-tab-action ${canDelete ? "" : "disabled"}" 
+         ${canDelete ? `data-action="delete-selected-canvases"` : ""}>
+        &#x1F5D1; Delete${selectedCount > 1 ? ` (${selectedCount})` : ""}
+      </a>
+    </div>
+  `;
 }
 
-function renderEffectsDialog() {
-  const canvas = getCanvasById(state.dialogs.effectsCanvasId);
-  if (!canvas) {
-    closeDialog("effectsDialog");
-    return;
-  }
+function renderFolderTab(canvasId, type, itemCount) {
+  const isFeature = type === "feature";
+  const selectedSet = isFeature 
+    ? (state.selectedFeatures[canvasId] || new Set())
+    : (state.selectedEffects[canvasId] || new Set());
+  const selectedCount = selectedSet.size;
+  const canEdit = selectedCount === 1;
+  const canDelete = selectedCount >= 1;
+  const colorClass = isFeature ? "yellow" : "cyan";
 
-  const effects = Array.isArray(canvas?.effectsManager?.effects) ? canvas.effectsManager.effects : [];
-  const currentEffectIndex = Number.isInteger(canvas?.effectsManager?.currentEffectIndex)
-    ? canvas.effectsManager.currentEffectIndex
-    : -1;
+  const getSelectedId = () => {
+    if (selectedCount !== 1) return null;
+    return Array.from(selectedSet)[0];
+  };
 
-  elements.effectsDialogEyebrow.textContent = canvas.name || "Canvas";
-  elements.effectsDialogTitle.textContent = `Effects | ${canvas.name || "Canvas"}`;
-  elements.effectsDialogCopy.textContent = `${effects.length} configured effect${effects.length === 1 ? "" : "s"}. Active: ${canvas.currentEffectName || "---"}`;
+  const selectedId = getSelectedId();
 
-  elements.currentEffectSelect.innerHTML = effects.length
-    ? effects.map((effect, index) => `
-        <option value="${index}" ${index === currentEffectIndex ? "selected" : ""}>${escapeHtml(effect.name || `Effect ${index + 1}`)}</option>
-      `).join("")
-    : '<option value="-1">No effects</option>';
-  elements.currentEffectSelect.disabled = !effects.length;
-
-  if (!effects.length) {
-    elements.effectsList.innerHTML = '<div class="canvas-empty">No effects configured.</div>';
-    return;
-  }
-
-  elements.effectsList.innerHTML = effects.map((effect, index) => {
-    const definition = getEffectDefinition(effect.type);
-    const typeLabel = definition ? definition.label : effect.type;
-    const scheduleText = formatSchedule(effect.schedule);
-    return `
-      <article class="effect-card panel ${index % 2 === 0 ? "card-blue" : "card-pink"}">
-        <div class="effect-card-header">
-          <div>
-            <div class="canvas-kicker">${index === currentEffectIndex ? "Current Effect" : "Effect Slot"}</div>
-            <h3>${escapeHtml(effect.name || `Effect ${index + 1}`)}</h3>
-          </div>
-          <div class="canvas-pill">${escapeHtml(typeLabel)}</div>
-        </div>
-        <div class="effect-card-body">
-          <p>${escapeHtml(summarizeEffect(effect, definition))}</p>
-          <p class="muted">${escapeHtml(scheduleText)}</p>
-        </div>
-        <div class="canvas-actions tight-actions">
-          <button class="action-button" type="button" data-action="edit-effect" data-canvas-id="${canvas.id}" data-effect-index="${index}">Edit</button>
-          <button class="action-button warning" type="button" data-action="delete-effect" data-canvas-id="${canvas.id}" data-effect-index="${index}">Delete</button>
-        </div>
-      </article>
-    `;
-  }).join("");
+  return `
+    <div class="folder-tab folder-tab-${colorClass}">
+      <a href="#" class="folder-tab-action" data-action="add-${type}" data-canvas-id="${canvasId}">&#x2795; New</a>
+      <span class="folder-tab-sep">&#x2502;</span>
+      <a href="#" class="folder-tab-action ${canEdit ? "" : "disabled"}" 
+         ${canEdit ? `data-action="edit-${type}" data-canvas-id="${canvasId}" data-${isFeature ? "feature-id" : "effect-index"}="${selectedId}"` : ""}>
+        &#x270E; Edit
+      </a>
+      <span class="folder-tab-sep">&#x2502;</span>
+      <a href="#" class="folder-tab-action ${canDelete ? "" : "disabled"}" 
+         ${canDelete ? `data-action="delete-selected-${type}s" data-canvas-id="${canvasId}"` : ""}>
+        &#x1F5D1; Delete${selectedCount > 1 ? ` (${selectedCount})` : ""}
+      </a>
+    </div>
+  `;
 }
 
-function syncOpenDialogs() {
-  if (elements.effectsDialog.open) {
-    renderEffectsDialog();
-  }
+function renderBufferMeter(feature) {
+  const response = feature.lastClientResponse || {};
+  const bufferPos = Number(response.bufferPos || 0);
+  const bufferSize = Number(response.bufferSize || 0);
+  const maxSize = Number(feature.clientBufferCount || bufferSize || 1);
+  const ratio = Math.min(Math.max(bufferPos / Math.max(maxSize, 1), 0), 1);
+  const status = ratio > 0.8 ? "danger" : ratio > 0.45 ? "warning" : "good";
 
-  if (elements.effectDialog.open) {
-    const canvas = getCanvasById(state.dialogs.effectCanvasId);
-    if (!canvas) {
-      closeDialog("effectDialog");
-    }
-  }
+  return `
+    <div class="queue-meter ${status}">
+      <span class="queue-meter-fill" style="width:${(ratio * 100).toFixed(1)}%"></span>
+      <span class="queue-meter-value">${bufferPos}/${maxSize}</span>
+    </div>
+  `;
+}
 
-  if (elements.featureDialog.open && state.dialogs.featureMode === "edit") {
-    const feature = getFeatureById(state.dialogs.featureCanvasId, state.dialogs.featureId);
-    if (!feature) {
-      closeDialog("featureDialog");
-    }
-  }
+function renderQueueMeter(feature) {
+  const queueDepth = Number(feature.queueDepth || 0);
+  const queueMaxSize = Number(feature.queueMaxSize || QUEUE_VISUAL_MAX);
+  const ratio = Math.min(Math.max(queueDepth / Math.max(queueMaxSize || 1, 1), 0), 1);
+  const status = queueDepth > 0.8 * queueMaxSize ? "danger" : queueDepth > 0.45 * queueMaxSize ? "warning" : "good";
 
-  if (elements.canvasDialog.open && state.dialogs.canvasMode === "edit") {
-    const canvas = getCanvasById(state.dialogs.canvasId);
-    if (!canvas) {
-      closeDialog("canvasDialog");
-    }
-  }
+  return `
+    <div class="queue-meter ${status}">
+      <span class="queue-meter-fill" style="width:${(ratio * 100).toFixed(1)}%"></span>
+      <span class="queue-meter-value">${queueDepth}/${queueMaxSize}</span>
+    </div>
+  `;
 }
 
 function updateSortButtons() {
@@ -730,7 +1107,6 @@ function renderError(error) {
   elements.connectionStatus.classList.remove("online");
   elements.connectionStatus.classList.add("offline");
   elements.connectionStatusText.textContent = "API unavailable";
-  elements.lastUpdatedText.textContent = error instanceof Error ? error.message : String(error);
 }
 
 function setBusy(isBusy) {
@@ -738,16 +1114,25 @@ function setBusy(isBusy) {
     elements.refreshButton,
     elements.startAllButton,
     elements.stopAllButton,
-    elements.newCanvasButton,
   ].forEach((button) => {
     button.disabled = isBusy;
   });
 }
 
 function handleActionClick(event) {
+  // Skip checkbox inputs — they are handled by the change event in handleTableChange
+  if (event.target instanceof HTMLInputElement && event.target.type === "checkbox") {
+    return;
+  }
+
   const trigger = event.target.closest("[data-action]");
   if (!(trigger instanceof HTMLElement)) {
     return;
+  }
+
+  // Prevent default for anchor elements to avoid page jump
+  if (trigger.tagName === "A") {
+    event.preventDefault();
   }
 
   const action = trigger.dataset.action;
@@ -756,11 +1141,15 @@ function handleActionClick(event) {
   const effectIndex = trigger.dataset.effectIndex !== undefined ? Number(trigger.dataset.effectIndex) : null;
 
   switch (action) {
-    case "filter":
-      state.filter = trigger.dataset.filter || "";
-      elements.filterInput.value = state.filter;
-      saveSettings();
-      render();
+    case "toggle-expand":
+      if (canvasId !== null) {
+        toggleExpandedCanvas(canvasId);
+      }
+      break;
+    case "toggle-section":
+      if (canvasId !== null && trigger.dataset.section) {
+        toggleSectionExpansion(canvasId, trigger.dataset.section);
+      }
       break;
     case "start":
       if (canvasId !== null) {
@@ -771,6 +1160,17 @@ function handleActionClick(event) {
       if (canvasId !== null) {
         postCanvasAction("/api/canvases/stop", [canvasId]);
       }
+      break;
+    case "toggle-canvas-select":
+      if (canvasId !== null) {
+        toggleCanvasSelection(canvasId);
+      }
+      break;
+    case "delete-selected-canvases":
+      deleteSelectedCanvases();
+      break;
+    case "add-canvas":
+      openCanvasDialog("create");
       break;
     case "edit-canvas":
       if (canvasId !== null) {
@@ -792,9 +1192,14 @@ function handleActionClick(event) {
         openFeatureDialog("edit", canvasId, featureId);
       }
       break;
-    case "edit-effects":
+    case "delete-feature":
+      if (canvasId !== null && featureId !== null) {
+        deleteFeatureById(canvasId, featureId);
+      }
+      break;
+    case "add-effect":
       if (canvasId !== null) {
-        openEffectsDialog(canvasId);
+        openEffectDialog("create", canvasId);
       }
       break;
     case "edit-effect":
@@ -807,9 +1212,340 @@ function handleActionClick(event) {
         deleteEffectByIndex(canvasId, effectIndex);
       }
       break;
+    case "toggle-feature-select":
+      if (canvasId !== null && featureId !== null) {
+        toggleFeatureSelection(canvasId, featureId);
+      }
+      break;
+    case "toggle-effect-select":
+      if (canvasId !== null && effectIndex !== null) {
+        toggleEffectSelection(canvasId, effectIndex);
+      }
+      break;
+    case "delete-selected-features":
+      if (canvasId !== null) {
+        deleteSelectedFeatures(canvasId);
+      }
+      break;
+    case "delete-selected-effects":
+      if (canvasId !== null) {
+        deleteSelectedEffects(canvasId);
+      }
+      break;
     default:
       break;
   }
+}
+
+async function handleTableChange(event) {
+  const target = event.target;
+  
+  // Handle checkbox selection changes
+  if (target instanceof HTMLInputElement && target.type === "checkbox" && target.classList.contains("row-checkbox")) {
+    const action = target.dataset.action;
+    const canvasId = Number(target.dataset.canvasId || 0);
+    
+    if (action === "toggle-canvas-select") {
+      if (canvasId) {
+        toggleCanvasSelection(canvasId);
+      }
+    } else if (action === "toggle-feature-select") {
+      const featureId = Number(target.dataset.featureId || 0);
+      if (canvasId && featureId !== null) {
+        toggleFeatureSelection(canvasId, featureId);
+      }
+    } else if (action === "toggle-effect-select") {
+      const effectIndex = Number(target.dataset.effectIndex);
+      if (canvasId && effectIndex !== null) {
+        toggleEffectSelection(canvasId, effectIndex);
+      }
+    }
+    return;
+  }
+
+  if (!(target instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  if (target.dataset.action !== "current-effect") {
+    return;
+  }
+
+  const canvasId = Number(target.dataset.canvasId || 0);
+  if (!canvasId) {
+    return;
+  }
+
+  try {
+    await saveCanvasMutation(canvasId, (canvas) => {
+      ensureEffectsManager(canvas);
+      canvas.effectsManager.currentEffectIndex = Number(target.value);
+    });
+    await refreshLoop(true);
+  } catch (error) {
+    console.error(error);
+    renderError(error);
+  }
+}
+
+function toggleExpandedCanvas(canvasId) {
+  if (state.expandedCanvasIds.has(canvasId)) {
+    state.expandedCanvasIds.delete(canvasId);
+  } else {
+    ensureSectionExpansion(canvasId);
+    state.expandedCanvasIds.add(canvasId);
+  }
+  renderTable();
+}
+
+function toggleCanvasSelection(canvasId) {
+  if (state.selectedCanvases.has(canvasId)) {
+    state.selectedCanvases.delete(canvasId);
+  } else {
+    state.selectedCanvases.add(canvasId);
+  }
+  renderTable();
+}
+
+async function deleteSelectedCanvases() {
+  const canvasIds = Array.from(state.selectedCanvases);
+  if (canvasIds.length === 0) return;
+
+  const count = canvasIds.length;
+  if (!confirm(`Delete ${count} selected canvas${count > 1 ? "es" : ""} and all their features?`)) {
+    return;
+  }
+
+  try {
+    for (const canvasId of canvasIds) {
+      await fetchJson(`/api/canvases/${canvasId}`, { method: "DELETE" });
+      state.expandedCanvasIds.delete(canvasId);
+    }
+    state.selectedCanvases.clear();
+    state.dirty = true;
+    await refreshLoop(true);
+  } catch (error) {
+    console.error(error);
+    renderError(error);
+  }
+}
+
+function toggleFeatureSelection(canvasId, featureId) {
+  if (!state.selectedFeatures[canvasId]) {
+    state.selectedFeatures[canvasId] = new Set();
+  }
+  const selected = state.selectedFeatures[canvasId];
+  if (selected.has(featureId)) {
+    selected.delete(featureId);
+  } else {
+    selected.add(featureId);
+  }
+  renderTable();
+}
+
+function toggleEffectSelection(canvasId, effectIndex) {
+  if (!state.selectedEffects[canvasId]) {
+    state.selectedEffects[canvasId] = new Set();
+  }
+  const selected = state.selectedEffects[canvasId];
+  if (selected.has(effectIndex)) {
+    selected.delete(effectIndex);
+  } else {
+    selected.add(effectIndex);
+  }
+  renderTable();
+}
+
+async function deleteSelectedFeatures(canvasId) {
+  const selected = state.selectedFeatures[canvasId];
+  if (!selected || selected.size === 0) return;
+  
+  const featureIds = Array.from(selected);
+  const count = featureIds.length;
+  
+  if (!confirm(`Delete ${count} selected feature${count > 1 ? "s" : ""}?`)) {
+    return;
+  }
+  
+  try {
+    for (const featureId of featureIds) {
+      await deleteFeatureById(canvasId, featureId, null, true);
+    }
+    state.selectedFeatures[canvasId] = new Set();
+    await refreshLoop(true);
+  } catch (error) {
+    console.error(error);
+    renderError(error);
+  }
+}
+
+async function deleteSelectedEffects(canvasId) {
+  const selected = state.selectedEffects[canvasId];
+  if (!selected || selected.size === 0) return;
+  
+  // Sort descending so we delete from end first (to preserve indices)
+  const indices = Array.from(selected).sort((a, b) => b - a);
+  const count = indices.length;
+  
+  if (!confirm(`Delete ${count} selected effect${count > 1 ? "s" : ""}?`)) {
+    return;
+  }
+  
+  try {
+    for (const effectIndex of indices) {
+      await deleteEffectByIndex(canvasId, effectIndex, null, true);
+    }
+    state.selectedEffects[canvasId] = new Set();
+    await refreshLoop(true);
+  } catch (error) {
+    console.error(error);
+    renderError(error);
+  }
+}
+
+function pruneExpandedSet() {
+  const validIds = new Set(state.canvases.map((canvas) => Number(canvas.id || 0)));
+  state.expandedCanvasIds.forEach((canvasId) => {
+    if (!validIds.has(canvasId)) {
+      state.expandedCanvasIds.delete(canvasId);
+    }
+  });
+  state.selectedCanvases.forEach((canvasId) => {
+    if (!validIds.has(canvasId)) {
+      state.selectedCanvases.delete(canvasId);
+    }
+  });
+  Object.keys(state.sectionExpansions).forEach((canvasId) => {
+    if (!validIds.has(Number(canvasId))) {
+      delete state.sectionExpansions[canvasId];
+    }
+  });
+  
+  // Prune stale feature selections
+  Object.keys(state.selectedFeatures).forEach((canvasId) => {
+    const numCanvasId = Number(canvasId);
+    if (!validIds.has(numCanvasId)) {
+      delete state.selectedFeatures[canvasId];
+    } else {
+      const canvas = state.canvases.find((c) => Number(c.id) === numCanvasId);
+      const validFeatureIds = new Set((canvas?.features || []).map((f) => Number(f.id)));
+      state.selectedFeatures[canvasId].forEach((featureId) => {
+        if (!validFeatureIds.has(featureId)) {
+          state.selectedFeatures[canvasId].delete(featureId);
+        }
+      });
+    }
+  });
+  
+  // Prune stale effect selections
+  Object.keys(state.selectedEffects).forEach((canvasId) => {
+    const numCanvasId = Number(canvasId);
+    if (!validIds.has(numCanvasId)) {
+      delete state.selectedEffects[canvasId];
+    } else {
+      const canvas = state.canvases.find((c) => Number(c.id) === numCanvasId);
+      const effectCount = canvas?.effectsManager?.effects?.length || 0;
+      state.selectedEffects[canvasId].forEach((effectIndex) => {
+        if (effectIndex >= effectCount) {
+          state.selectedEffects[canvasId].delete(effectIndex);
+        }
+      });
+    }
+  });
+}
+
+function ensureSectionExpansion(canvasId) {
+  const key = String(canvasId);
+  if (!state.sectionExpansions[key]) {
+    state.sectionExpansions[key] = {
+      features: true,
+      effects: true,
+    };
+  }
+  return state.sectionExpansions[key];
+}
+
+function toggleSectionExpansion(canvasId, section) {
+  if (section !== "features" && section !== "effects") {
+    return;
+  }
+  const sections = ensureSectionExpansion(canvasId);
+  sections[section] = !sections[section];
+  renderTable();
+}
+
+function matchesCanvasFilter(canvas) {
+  if (!state.filter) {
+    return true;
+  }
+
+  const features = Array.isArray(canvas.features) ? canvas.features : [];
+  const effects = Array.isArray(canvas?.effectsManager?.effects) ? canvas.effectsManager.effects : [];
+  const searchIndex = [
+    canvas.name,
+    canvas.currentEffectName,
+    ...features.map((feature) => feature.friendlyName),
+    ...features.map((feature) => feature.hostName),
+    ...effects.map((effect) => effect.name),
+  ].join(" ").toLowerCase();
+
+  return searchIndex.includes(state.filter.toLowerCase());
+}
+
+function compareCanvases(left, right) {
+  const direction = state.sortDirection === "asc" ? 1 : -1;
+  const leftValue = sortableCanvasValue(left, state.sortKey);
+  const rightValue = sortableCanvasValue(right, state.sortKey);
+
+  if (typeof leftValue === "string" || typeof rightValue === "string") {
+    return String(leftValue).localeCompare(String(rightValue)) * direction;
+  }
+
+  return ((leftValue || 0) - (rightValue || 0)) * direction;
+}
+
+function sortableCanvasValue(canvas, key) {
+  switch (key) {
+    case "dimensions":
+      return Number(canvas.width || 0) * Number(canvas.height || 0);
+    case "featureCount":
+      return Array.isArray(canvas.features) ? canvas.features.length : 0;
+    case "effectCount":
+      return Array.isArray(canvas?.effectsManager?.effects) ? canvas.effectsManager.effects.length : 0;
+    case "currentEffectName":
+      return String(canvas.currentEffectName || "");
+    case "fps":
+      return Number(canvas?.effectsManager?.fps || 0);
+    case "status":
+      return classifyCanvasStatus(canvas).rank;
+    case "name":
+    default:
+      return String(canvas.name || "");
+  }
+}
+
+function classifyCanvasStatus(canvas) {
+  const features = Array.isArray(canvas.features) ? canvas.features : [];
+  const onlineCount = features.filter((feature) => feature.isConnected).length;
+  const isRunning = Boolean(canvas?.effectsManager?.running);
+
+  if (!features.length) {
+    return { className: isRunning ? "warning" : "danger", label: isRunning ? "NO FEATURES" : "IDLE", rank: isRunning ? 2 : 0 };
+  }
+
+  if (!isRunning) {
+    return { className: "danger", label: "STOPPED", rank: 0 };
+  }
+
+  if (onlineCount === features.length) {
+    return { className: "good", label: "ONLINE", rank: 3 };
+  }
+
+  if (onlineCount > 0) {
+    return { className: "warning", label: "PARTIAL", rank: 2 };
+  }
+
+  return { className: "danger", label: "OFFLINE", rank: 1 };
 }
 
 function openCanvasDialog(mode, canvasId = null) {
@@ -914,13 +1650,6 @@ function openFeatureDialog(mode, canvasId, featureId = null) {
   elements.featureDialog.showModal();
 }
 
-function openEffectsDialog(canvasId) {
-  clearDialogMessage(elements.effectsDialog);
-  state.dialogs.effectsCanvasId = canvasId;
-  renderEffectsDialog();
-  elements.effectsDialog.showModal();
-}
-
 function openEffectDialog(mode, canvasId, effectIndex = null) {
   clearDialogMessage(elements.effectDialog);
   state.dialogs.effectMode = mode;
@@ -967,7 +1696,7 @@ function renderDynamicField(field, value) {
   const inputId = `effect-field-${field.path.replaceAll(".", "-")}`;
   if (field.input === "checkbox") {
     return `
-      <label class="toggle dialog-toggle dynamic-toggle">
+      <label class="toggle dialog-toggle">
         <input id="${inputId}" type="checkbox" data-field-path="${escapeAttribute(field.path)}" data-input-kind="checkbox" ${value ? "checked" : ""}>
         <span>${escapeHtml(field.label)}</span>
       </label>
@@ -1058,6 +1787,7 @@ async function handleCanvasSubmit(event) {
     }
 
     closeDialog("canvasDialog");
+    state.dirty = true;
     await refreshLoop(true);
   } catch (error) {
     console.error(error);
@@ -1095,6 +1825,7 @@ async function handleFeatureSubmit(event) {
     }
 
     closeDialog("featureDialog");
+    state.dirty = true;
     await refreshLoop(true);
   } catch (error) {
     console.error(error);
@@ -1129,10 +1860,8 @@ async function handleEffectSubmit(event) {
     }
 
     closeDialog("effectDialog");
+    state.dirty = true;
     await refreshLoop(true);
-    if (elements.effectsDialog.open && state.dialogs.effectsCanvasId === canvasId) {
-      renderEffectsDialog();
-    }
   } catch (error) {
     console.error(error);
     setDialogMessage(elements.effectDialog, error instanceof Error ? error.message : String(error));
@@ -1153,19 +1882,7 @@ async function handleFeatureDelete() {
   if (canvasId === null || featureId === null) {
     return;
   }
-
-  if (!window.confirm("Delete this feature?")) {
-    return;
-  }
-
-  try {
-    await fetchJson(`/api/canvases/${canvasId}/features/${featureId}`, { method: "DELETE" });
-    closeDialog("featureDialog");
-    await refreshLoop(true);
-  } catch (error) {
-    console.error(error);
-    setDialogMessage(elements.featureDialog, error instanceof Error ? error.message : String(error));
-  }
+  await deleteFeatureById(canvasId, featureId, elements.featureDialog);
 }
 
 async function handleEffectDelete() {
@@ -1184,12 +1901,11 @@ async function deleteCanvasById(canvasId, dialogSource = null) {
 
   try {
     await fetchJson(`/api/canvases/${canvasId}`, { method: "DELETE" });
+    state.dirty = true;
     if (dialogSource) {
       dialogSource.close();
     }
-    if (elements.effectsDialog.open && state.dialogs.effectsCanvasId === canvasId) {
-      closeDialog("effectsDialog");
-    }
+    state.expandedCanvasIds.delete(Number(canvasId));
     await refreshLoop(true);
   } catch (error) {
     console.error(error);
@@ -1201,19 +1917,43 @@ async function deleteCanvasById(canvasId, dialogSource = null) {
   }
 }
 
-async function deleteEffectByIndex(canvasId, effectIndex, dialogSource = null) {
-  if (!window.confirm("Delete this effect?")) {
+async function deleteFeatureById(canvasId, featureId, dialogSource = null, skipConfirm = false) {
+  if (!skipConfirm && !window.confirm("Delete this feature?")) {
+    return;
+  }
+
+  try {
+    await fetchJson(`/api/canvases/${canvasId}/features/${featureId}`, { method: "DELETE" });
+    state.dirty = true;
+    if (dialogSource) {
+      dialogSource.close();
+    }
+    if (!skipConfirm) {
+      await refreshLoop(true);
+    }
+  } catch (error) {
+    console.error(error);
+    if (dialogSource) {
+      setDialogMessage(dialogSource, error instanceof Error ? error.message : String(error));
+    } else {
+      renderError(error);
+    }
+  }
+}
+
+async function deleteEffectByIndex(canvasId, effectIndex, dialogSource = null, skipConfirm = false) {
+  if (!skipConfirm && !window.confirm("Delete this effect?")) {
     return;
   }
 
   try {
     await fetchJson(`/api/canvases/${canvasId}/effects/${effectIndex}`, { method: "DELETE" });
+    state.dirty = true;
     if (dialogSource) {
       dialogSource.close();
     }
-    await refreshLoop(true);
-    if (elements.effectsDialog.open && state.dialogs.effectsCanvasId === canvasId) {
-      renderEffectsDialog();
+    if (!skipConfirm) {
+      await refreshLoop(true);
     }
   } catch (error) {
     console.error(error);
@@ -1425,6 +2165,29 @@ function setDialogMessage(dialog, text) {
   message.classList.add("error-message");
 }
 
+function syncOpenDialogs() {
+  if (elements.effectDialog.open) {
+    const canvas = getCanvasById(state.dialogs.effectCanvasId);
+    if (!canvas) {
+      closeDialog("effectDialog");
+    }
+  }
+
+  if (elements.featureDialog.open && state.dialogs.featureMode === "edit") {
+    const feature = getFeatureById(state.dialogs.featureCanvasId, state.dialogs.featureId);
+    if (!feature) {
+      closeDialog("featureDialog");
+    }
+  }
+
+  if (elements.canvasDialog.open && state.dialogs.canvasMode === "edit") {
+    const canvas = getCanvasById(state.dialogs.canvasId);
+    if (!canvas) {
+      closeDialog("canvasDialog");
+    }
+  }
+}
+
 function getCanvasById(canvasId) {
   return state.canvases.find((canvas) => Number(canvas.id) === Number(canvasId)) || null;
 }
@@ -1460,6 +2223,7 @@ function ensureEffectsManager(canvas) {
       effects: [],
     };
   }
+
   if (!Array.isArray(canvas.effectsManager.effects)) {
     canvas.effectsManager.effects = [];
   }
@@ -1522,270 +2286,6 @@ function formatSchedule(schedule) {
   return parts.join(" | ") || "No schedule restrictions.";
 }
 
-function compareRows(left, right) {
-  const direction = state.sortDirection === "asc" ? 1 : -1;
-  const leftValue = sortableValue(left, state.sortKey);
-  const rightValue = sortableValue(right, state.sortKey);
-
-  if (typeof leftValue === "string" || typeof rightValue === "string") {
-    return String(leftValue).localeCompare(String(rightValue)) * direction;
-  }
-
-  return ((leftValue || 0) - (rightValue || 0)) * direction;
-}
-
-function sortableValue(row, key) {
-  switch (key) {
-    case "featureFps":
-      return row.featureFps ?? -1;
-    case "queueDepth":
-      return row.queueDepth ?? -1;
-    case "bufferRatio":
-      return row.bufferRatio ?? -1;
-    case "wifiSignalAbs":
-      return row.wifiSignalAbs ?? 999;
-    case "bandwidth":
-      return row.bandwidth ?? -1;
-    case "deltaSeconds":
-      return row.deltaSeconds === null ? 999 : Math.abs(row.deltaSeconds);
-    default:
-      return row[key];
-  }
-}
-
-function classifyFps(row) {
-  if (!row.isConnected || row.featureFps === null) {
-    return "muted";
-  }
-  return row.featureFps < 0.8 * row.canvasFps ? "metric-warning" : "metric-good";
-}
-
-function classifyQueue(row) {
-  if (!row.isConnected || row.queueDepth === null) {
-    return "muted";
-  }
-  if (row.queueDepth < 100) {
-    return "good";
-  }
-  if (row.queueDepth < 250) {
-    return "warning";
-  }
-  return "danger";
-}
-
-function classifyBuffer(row) {
-  if (!row.isConnected || row.bufferRatio === null) {
-    return "muted";
-  }
-  if (row.bufferRatio >= 0.25 && row.bufferRatio <= 0.85) {
-    return "good";
-  }
-  if (row.bufferRatio > 0.95) {
-    return "danger";
-  }
-  return "warning";
-}
-
-function classifySignal(row) {
-  if (!row.isConnected || row.wifiSignalAbs === null) {
-    return "muted";
-  }
-  if (row.wifiSignalAbs >= 100) {
-    return "muted";
-  }
-  if (row.wifiSignalAbs < 70) {
-    return "metric-good";
-  }
-  if (row.wifiSignalAbs < 80) {
-    return "metric-warning";
-  }
-  return "metric-danger";
-}
-
-function classifyDelta(row) {
-  if (!row.isConnected || row.deltaSeconds === null) {
-    return "muted";
-  }
-  const delta = Math.abs(row.deltaSeconds);
-  if (delta < 2.0) {
-    return "good";
-  }
-  if (delta < 3.0) {
-    return "warning";
-  }
-  return "danger";
-}
-
-function statusClassForReconnect(reconnectCount) {
-  if (reconnectCount === null || reconnectCount === 0) {
-    return "metric-good";
-  }
-  if (reconnectCount < 3) {
-    return "metric-good";
-  }
-  if (reconnectCount < 10) {
-    return "metric-warning";
-  }
-  return "metric-danger";
-}
-
-function renderFpsCell(row, statusClass) {
-  if (!row.isConnected || row.featureFps === null) {
-    return '<span class="muted">--</span>';
-  }
-  return `<span class="${statusClass}">${row.featureFps}</span><span class="muted"> / ${row.canvasFps}</span>`;
-}
-
-function renderQueueCell(row, status) {
-  if (!row.isConnected || row.queueDepth === null) {
-    return '<span class="muted">--</span>';
-  }
-  const width = Math.min(100, (row.queueDepth / QUEUE_VISUAL_MAX) * 100);
-  return `
-    <div class="meter ${status}">
-      <span class="meter-fill" style="width:${width}%"></span>
-      <span class="meter-value">${row.queueDepth}/${row.queueMaxSize || QUEUE_VISUAL_MAX}</span>
-    </div>
-  `;
-}
-
-function renderBufferCell(row, status) {
-  if (!row.isConnected || row.bufferPos === null || row.bufferSize === null) {
-    return '<span class="muted">--</span>';
-  }
-  const width = Math.min(100, Math.max(0, row.bufferRatio * 100));
-  return `
-    <div class="meter ${status}">
-      <span class="meter-fill" style="width:${width}%"></span>
-      <span class="meter-value">${row.bufferPos}/${row.bufferSize}</span>
-    </div>
-  `;
-}
-
-function renderDeltaCell(row, status) {
-  if (!row.isConnected || row.deltaSeconds === null) {
-    return '<span class="muted">--</span>';
-  }
-  const displayText = Math.abs(row.deltaSeconds) > 100
-    ? "Unset"
-    : `${row.deltaSeconds >= 0 ? "+" : ""}${row.deltaSeconds.toFixed(1)}s`;
-  const normalized = Math.max(0, Math.min(1, ((row.deltaSeconds / 3) + 1) / 2));
-  return `
-    <div class="delta-stack">
-      <span class="mono ${status === "good" ? "metric-good" : status === "warning" ? "metric-warning" : status === "danger" ? "metric-danger" : "muted"}">${displayText}</span>
-      <span class="delta-track ${status}">
-        <span class="delta-marker" style="left: calc(${(normalized * 100).toFixed(2)}% - 5px)"></span>
-      </span>
-    </div>
-  `;
-}
-
-function requireText(value, message) {
-  const text = String(value || "").trim();
-  if (!text) {
-    throw new Error(message);
-  }
-  return text;
-}
-
-function requirePositiveInt(value, message) {
-  const parsed = Number.parseInt(String(value), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(message);
-  }
-  return parsed;
-}
-
-function requireNonNegativeInt(value, message) {
-  const parsed = Number.parseInt(String(value), 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error(message);
-  }
-  return parsed;
-}
-
-function getValueAtPath(object, path) {
-  return String(path || "").split(".").reduce((current, part) => (current && current[part] !== undefined ? current[part] : undefined), object);
-}
-
-function setValueAtPath(object, path, value) {
-  const parts = String(path).split(".");
-  let current = object;
-  while (parts.length > 1) {
-    const part = parts.shift();
-    if (!current[part] || typeof current[part] !== "object") {
-      current[part] = {};
-    }
-    current = current[part];
-  }
-  current[parts[0]] = value;
-}
-
-function normalizeTimeValue(value) {
-  if (!value) {
-    return null;
-  }
-  return value.length === 5 ? `${value}:00` : value;
-}
-
-function timeToInputValue(value) {
-  return value ? String(value).slice(0, 5) : "";
-}
-
-function rgbToHex(color) {
-  const red = clampColorComponent(color?.r);
-  const green = clampColorComponent(color?.g);
-  const blue = clampColorComponent(color?.b);
-  return `#${red.toString(16).padStart(2, "0")}${green.toString(16).padStart(2, "0")}${blue.toString(16).padStart(2, "0")}`;
-}
-
-function hexToRgb(value) {
-  const normalized = String(value || "#ffffff").replace("#", "");
-  return {
-    r: Number.parseInt(normalized.slice(0, 2), 16),
-    g: Number.parseInt(normalized.slice(2, 4), 16),
-    b: Number.parseInt(normalized.slice(4, 6), 16),
-  };
-}
-
-function clampColorComponent(value) {
-  const parsed = Number(value || 0);
-  return Math.max(0, Math.min(255, Number.isFinite(parsed) ? parsed : 0));
-}
-
-function deepClone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
-function formatReconnect(reconnectCount) {
-  if (reconnectCount === null) {
-    return "--";
-  }
-  return String(reconnectCount);
-}
-
-function formatWifiSignal(signal) {
-  if (signal === null || signal === undefined || Number.isNaN(signal)) {
-    return "--";
-  }
-  if (Math.abs(signal) >= 100) {
-    return "LAN";
-  }
-  return `${Math.round(signal)} dBm`;
-}
-
-function formatBandwidth(bytesPerSecond) {
-  const units = ["B/s", "KB/s", "MB/s", "GB/s"];
-  let value = Number(bytesPerSecond || 0);
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  const precision = unitIndex === 0 ? 0 : unitIndex === 1 ? 1 : 2;
-  return `${value.toFixed(precision)} ${units[unitIndex]}`;
-}
-
 function formatTimestamp(date) {
   return date.toLocaleTimeString([], {
     hour: "2-digit",
@@ -1794,8 +2294,94 @@ function formatTimestamp(date) {
   });
 }
 
+function formatBandwidth(bytesPerSecond) {
+  const value = Number(bytesPerSecond || 0);
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(2)} MB/s`;
+  }
+  if (value >= 1024) {
+    return `${(value / 1024).toFixed(1)} KB/s`;
+  }
+  return `${value.toFixed(0)} B/s`;
+}
+
+function requireText(value, message) {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    throw new Error(message);
+  }
+  return normalized;
+}
+
+function requirePositiveInt(value, message) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(message);
+  }
+  return parsed;
+}
+
+function requireNonNegativeInt(value, message) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(message);
+  }
+  return parsed;
+}
+
+function normalizeTimeValue(value) {
+  if (!value) {
+    return null;
+  }
+  return `${value}:00`;
+}
+
+function timeToInputValue(value) {
+  return String(value || "").slice(0, 5);
+}
+
+function getValueAtPath(target, path) {
+  return path.split(".").reduce((value, key) => value?.[key], target);
+}
+
+function setValueAtPath(target, path, value) {
+  const keys = path.split(".");
+  let cursor = target;
+  keys.slice(0, -1).forEach((key) => {
+    if (!cursor[key] || typeof cursor[key] !== "object") {
+      cursor[key] = {};
+    }
+    cursor = cursor[key];
+  });
+  cursor[keys[keys.length - 1]] = value;
+}
+
+function rgbToHex(color) {
+  const r = clampColor(color.r);
+  const g = clampColor(color.g);
+  const b = clampColor(color.b);
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function hexToRgb(hex) {
+  const normalized = String(hex || "#ffffff").replace("#", "");
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16),
+  };
+}
+
+function clampColor(value) {
+  return Math.max(0, Math.min(255, Number(value || 0)));
+}
+
+function toHex(value) {
+  return value.toString(16).padStart(2, "0");
+}
+
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -1804,5 +2390,9 @@ function escapeHtml(value) {
 }
 
 function escapeAttribute(value) {
-  return escapeHtml(value).replaceAll("\n", " ");
+  return escapeHtml(value).replaceAll("`", "&#96;");
+}
+
+function deepClone(value) {
+  return JSON.parse(JSON.stringify(value));
 }

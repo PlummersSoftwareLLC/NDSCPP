@@ -2,6 +2,20 @@
     "version": "0.2.0",
     "configurations": [
       {
+        "name": "Run ndscpp",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/ndscpp",
+        "args": [],
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}",
+        "environment": [],
+        "externalConsole": false,
+        "MIMode": "lldb",
+        "preLaunchTask": "Prepare ndscpp",
+        "noDebug": true
+      },
+      {
         "name": "Debug ndscpp",
         "type": "cppdbg",
         "request": "launch",
@@ -12,7 +26,7 @@
         "environment": [],
         "externalConsole": false,
         "MIMode": "lldb",
-        "preLaunchTask": "Build ndscpp", // Run the build task before debugging
+        "preLaunchTask": "Prepare ndscpp", // Kill the previous process and rebuild before debugging
         "setupCommands": [
           {
             "description": "Enable pretty-printing for gdb",

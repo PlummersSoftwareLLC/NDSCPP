@@ -467,6 +467,20 @@ class Controller : public IController
         }
     }
 
+    void ClearAllCanvases() override
+    {
+        lock_guard lock(_canvasMutex);
+        logger->debug("Clearing all canvases...");
+
+        for (auto &canvas : _canvases)
+        {
+            canvas->Effects().Stop();
+            for (auto &feature : canvas->Features())
+                feature->Socket()->Stop();
+        }
+        _canvases.clear();
+    }
+
     bool UpdateCanvas(shared_ptr<ICanvas> ptrCanvas) override
     {
         logger->debug("Updating canvas {}...", ptrCanvas->Name());
@@ -544,6 +558,7 @@ inline void to_json(nlohmann::json &j, const IController &controller)
     {
         j["port"] = controller.GetPort();
         j["webuiport"] = controller.GetWebUIPort();
+        j["canvases"] = nlohmann::json::array();
         for (const auto &canvas : controller.Canvases())
             j["canvases"].push_back(*canvas);
     }
@@ -567,7 +582,7 @@ inline void from_json(const nlohmann::json &j, unique_ptr<Controller> & ptrContr
         ptrController = make_unique<Controller>(port, webUiPort);
 
         // Extract canvases
-        for (const auto &canvasJson : j.at("canvases"))
+        for (const auto &canvasJson : j.value("canvases", nlohmann::json::array()))
             ptrController->AddCanvas(canvasJson.get<shared_ptr<ICanvas>>());
     } 
     catch (const exception &e) 
