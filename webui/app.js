@@ -62,6 +62,7 @@ const state = {
     effectCanvasId: null,
     effectIndex: null,
   },
+  tableInteracting: false,
 };
 
 const elements = {};
@@ -269,6 +270,8 @@ function bindEvents() {
 
   elements.canvasTableBody.addEventListener("click", handleActionClick);
   elements.canvasTableBody.addEventListener("change", handleTableChange);
+  elements.canvasTableBody.addEventListener("mousedown", () => { state.tableInteracting = true; });
+  document.addEventListener("mouseup", () => { state.tableInteracting = false; });
   elements.canvasFolderTab.addEventListener("click", handleActionClick);
 
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
@@ -343,6 +346,12 @@ function loadSettings() {
     state.sortDirection = parsed.sortDirection || state.sortDirection;
     state.refreshMs = Number(parsed.refreshMs) || DEFAULT_REFRESH_MS;
     state.autoRefresh = parsed.autoRefresh !== false;
+    if (parsed.dirty === true)
+      state.dirty = true;
+    if (Array.isArray(parsed.expandedCanvasIds))
+      state.expandedCanvasIds = new Set(parsed.expandedCanvasIds);
+    if (parsed.sectionExpansions && typeof parsed.sectionExpansions === "object")
+      state.sectionExpansions = parsed.sectionExpansions;
   } catch (_) {
   }
 }
@@ -356,6 +365,9 @@ function saveSettings() {
       sortDirection: state.sortDirection,
       refreshMs: state.refreshMs,
       autoRefresh: state.autoRefresh,
+      dirty: state.dirty,
+      expandedCanvasIds: [...state.expandedCanvasIds],
+      sectionExpansions: state.sectionExpansions,
     })
   );
 }
@@ -450,6 +462,7 @@ async function handleNewConfig() {
   try {
     await fetchJson("/api/controller/reset", { method: "POST" });
     state.dirty = false;
+    saveSettings();
     state.expandedCanvasIds.clear();
     state.selectedCanvases.clear();
     state.selectedFeatures = {};
@@ -568,6 +581,7 @@ async function handleConfigFileSelected(event) {
       });
       console.log("[Load] PUT succeeded");
       state.dirty = false;
+      saveSettings();
     }
 
     state.expandedCanvasIds.clear();
@@ -642,6 +656,7 @@ async function insertCanvases(incomingCanvases) {
   });
 
   state.dirty = true;
+  saveSettings();
   console.log(`[Insert] PUT complete — ${toInsert.length} added at index ${insertIdx}, ${toOverwrite.size} overwritten`);
 }
 
@@ -686,6 +701,7 @@ async function handleSaveConfig() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     state.dirty = false;
+    saveSettings();
   } catch (error) {
     console.error(error);
     alert("Failed to save configuration: " + (error instanceof Error ? error.message : String(error)));
@@ -818,13 +834,128 @@ function renderTable() {
   elements.tableMetaText.textContent = `${visibleCanvases.length} visible canvas${visibleCanvases.length === 1 ? "" : "es"}`;
 
   if (!visibleCanvases.length) {
-    elements.canvasTableBody.innerHTML = '<tr><td colspan="9" class="empty-cell">No matching canvases.</td></tr>';
+    const empty = '<tr><td colspan="9" class="empty-cell">No matching canvases.</td></tr>';
+    if (elements.canvasTableBody.innerHTML !== empty)
+      elements.canvasTableBody.innerHTML = empty;
     elements.canvasFolderTab.innerHTML = renderCanvasFolderTab();
     return;
   }
 
-  elements.canvasTableBody.innerHTML = visibleCanvases.map((canvas) => renderCanvasRows(canvas)).join("");
+  const newHtml = visibleCanvases.map((canvas) => renderCanvasRows(canvas)).join("");
+  if (!state.tableInteracting && elements.canvasTableBody.innerHTML !== newHtml)
+    elements.canvasTableBody.innerHTML = newHtml;
   elements.canvasFolderTab.innerHTML = renderCanvasFolderTab();
+  syncPreviewLoops();
+}
+
+// ── Preview animation system ──────────────────────────────────────
+
+const previewLoops = new Map(); // canvasId → { running, timeoutId, canvas }
+
+function syncPreviewLoops() {
+  // Find all visible preview containers in the DOM
+  const activeContainers = new Map();
+  document.querySelectorAll('.preview-container[data-preview-for]').forEach((el) => {
+    activeContainers.set(Number(el.dataset.previewFor), el);
+  });
+
+  // Stop loops whose containers are gone
+  for (const [id, loop] of previewLoops) {
+    if (!activeContainers.has(id)) {
+      loop.running = false;
+      clearTimeout(loop.timeoutId);
+      previewLoops.delete(id);
+    }
+  }
+
+  // For each visible container, adopt existing canvas or start new loop
+  for (const [id, container] of activeContainers) {
+    const existing = previewLoops.get(id);
+    if (existing) {
+      // Re-adopt persistent canvas into the (possibly rebuilt) container
+      container.innerHTML = '';
+      container.appendChild(existing.canvas);
+    } else {
+      // Create a new persistent canvas and start a loop
+      const canvas = document.createElement('canvas');
+      canvas.className = 'preview-canvas';
+      container.innerHTML = '';
+      container.appendChild(canvas);
+      const loop = { running: true, timeoutId: 0, canvas };
+      previewLoops.set(id, loop);
+      runPreviewLoop(id, loop);
+    }
+  }
+}
+
+async function runPreviewLoop(canvasId, loop) {
+  while (loop.running) {
+    let delayMs = 33; // default ~30fps
+    try {
+      const resp = await fetch(`/api/canvases/${canvasId}/pixels`);
+      if (!resp.ok) throw new Error(resp.statusText);
+      const buf = await resp.arrayBuffer();
+      const view = new DataView(buf);
+      const w = view.getUint16(0, true);
+      const h = view.getUint16(2, true);
+      const fps = view.getUint16(4, true);
+      if (fps > 0) delayMs = 1000 / fps;
+
+      drawPreview(loop.canvas, w, h, new Uint8Array(buf, 6));
+    } catch { /* skip frame */ }
+
+    await new Promise((r) => { loop.timeoutId = setTimeout(r, delayMs); });
+  }
+  previewLoops.delete(canvasId);
+}
+
+function drawPreview(canvas, srcW, srcH, rgb) {
+  const container = canvas.parentElement;
+  if (!container) return;
+  const availW = container.clientWidth - 20; // padding
+
+  const totalPixels = srcW * srcH;
+  const gap = 1;
+
+  let cols = srcW;
+  let rows = srcH;
+
+  if (srcH === 1) {
+    // 1D strip: wrap into multiple rows if too wide at minimum pixel size
+    const minPixelSize = 4;
+    if (cols * (minPixelSize + gap) - gap > availW) {
+      cols = Math.max(1, Math.floor((availW + gap) / (minPixelSize + gap)));
+    }
+    rows = Math.ceil(totalPixels / cols);
+  }
+
+  // Scale pixel size to fit the available width (may be < 1px for very wide 2D canvases)
+  const pixelSize = Math.max(1, Math.floor((availW - (cols - 1) * gap) / cols));
+
+  const totalW = cols * pixelSize + (cols - 1) * gap;
+  const totalH = rows * pixelSize + (rows - 1) * gap;
+
+  if (canvas.width !== totalW || canvas.height !== totalH) {
+    canvas.width = totalW;
+    canvas.height = totalH;
+  }
+
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, totalW, totalH);
+
+  for (let p = 0; p < totalPixels; p++) {
+    const col = p % cols;
+    const row = Math.floor(p / cols);
+    const i = p * 3;
+    ctx.fillStyle = `rgb(${rgb[i]},${rgb[i + 1]},${rgb[i + 2]})`;
+    ctx.fillRect(
+      col * (pixelSize + gap),
+      row * (pixelSize + gap),
+      pixelSize,
+      pixelSize
+    );
+  }
 }
 
 function renderCanvasRows(canvas) {
@@ -906,6 +1037,12 @@ function renderCanvasRows(canvas) {
                   ${renderFolderTab(canvasId, "effect", effects.length)}
                 ` : ""}
               </section>
+              <section class="nested-card card-red${sections.preview ? '' : ' collapsed'}">
+                ${renderPreviewSectionHeader(canvasId, sections.preview)}
+                ${sections.preview ? `
+                  <div class="preview-container" data-preview-for="${canvasId}"></div>
+                ` : ""}
+              </section>
             </div>
           </div>
         </td>
@@ -970,6 +1107,31 @@ function renderSectionHeaderRow({ canvasId, section, expanded, title, firstColum
   `;
 }
 
+function renderPreviewSectionHeader(canvasId, expanded) {
+  return `
+    <div class="section-header-grid preview-header-clickable"
+         style="grid-template-columns:1fr"
+         data-action="toggle-section"
+         data-canvas-id="${canvasId}"
+         data-section="preview"
+         role="button"
+         tabindex="0"
+    >
+      <button
+        class="section-toggle"
+        type="button"
+        data-action="toggle-section"
+        data-canvas-id="${canvasId}"
+        data-section="preview"
+        aria-expanded="${expanded ? "true" : "false"}"
+      >
+        <span class="section-toggle-icon">${expanded ? "v" : ">"}</span>
+        <span>Preview</span>
+      </button>
+    </div>
+  `;
+}
+
 function renderNestedColgroup(firstColumnWidth, columns) {
   return `
     <colgroup>
@@ -999,7 +1161,7 @@ function renderEffectsTable(canvas) {
         <td class="checkbox-cell">
           <input type="checkbox" class="row-checkbox" data-action="toggle-effect-select" data-canvas-id="${canvasId}" data-effect-index="${index}" ${isSelected ? "checked" : ""}>
         </td>
-        <td>${escapeHtml(effect.name || `Effect ${index + 1}`)}${index === currentEffectIndex ? ' <span class="status-chip good">CURRENT</span>' : ""}</td>
+        <td class="effect-name-cell" data-action="set-current-effect" data-canvas-id="${canvasId}" data-effect-index="${index}">${escapeHtml(effect.name || `Effect ${index + 1}`)}${index === currentEffectIndex ? ' <span class="status-chip good">CURRENT</span>' : ""}</td>
         <td>${escapeHtml(definition ? definition.label : effect.type || "Unknown")}</td>
         <td title="${escapeAttribute(summarizeEffect(effect, definition))}">${escapeHtml(summarizeEffect(effect, definition))}</td>
         <td>${escapeHtml(formatSchedule(effect.schedule))}</td>
@@ -1232,6 +1394,11 @@ function handleActionClick(event) {
         deleteSelectedEffects(canvasId);
       }
       break;
+    case "set-current-effect":
+      if (canvasId !== null && effectIndex !== null) {
+        setCurrentEffect(canvasId, effectIndex);
+      }
+      break;
     default:
       break;
   }
@@ -1295,6 +1462,7 @@ function toggleExpandedCanvas(canvasId) {
     ensureSectionExpansion(canvasId);
     state.expandedCanvasIds.add(canvasId);
   }
+  saveSettings();
   renderTable();
 }
 
@@ -1323,6 +1491,7 @@ async function deleteSelectedCanvases() {
     }
     state.selectedCanvases.clear();
     state.dirty = true;
+    saveSettings();
     await refreshLoop(true);
   } catch (error) {
     console.error(error);
@@ -1354,6 +1523,20 @@ function toggleEffectSelection(canvasId, effectIndex) {
     selected.add(effectIndex);
   }
   renderTable();
+}
+
+async function setCurrentEffect(canvasId, effectIndex) {
+  try {
+    await fetchJson(`/api/canvases/${canvasId}/currentEffect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ effectIndex }),
+    });
+    await refreshLoop(true);
+  } catch (error) {
+    console.error(error);
+    renderError(error);
+  }
 }
 
 async function deleteSelectedFeatures(canvasId) {
@@ -1452,6 +1635,16 @@ function pruneExpandedSet() {
       });
     }
   });
+
+  // Auto-collapse preview when a canvas has zero effects
+  state.canvases.forEach((canvas) => {
+    const id = String(canvas.id || 0);
+    const effectCount = canvas?.effectsManager?.effects?.length || 0;
+    if (effectCount === 0 && state.sectionExpansions[id]?.preview) {
+      state.sectionExpansions[id].preview = false;
+      saveSettings();
+    }
+  });
 }
 
 function ensureSectionExpansion(canvasId) {
@@ -1460,17 +1653,19 @@ function ensureSectionExpansion(canvasId) {
     state.sectionExpansions[key] = {
       features: true,
       effects: true,
+      preview: false,
     };
   }
   return state.sectionExpansions[key];
 }
 
 function toggleSectionExpansion(canvasId, section) {
-  if (section !== "features" && section !== "effects") {
+  if (section !== "features" && section !== "effects" && section !== "preview") {
     return;
   }
   const sections = ensureSectionExpansion(canvasId);
   sections[section] = !sections[section];
+  saveSettings();
   renderTable();
 }
 
@@ -1788,6 +1983,7 @@ async function handleCanvasSubmit(event) {
 
     closeDialog("canvasDialog");
     state.dirty = true;
+    saveSettings();
     await refreshLoop(true);
   } catch (error) {
     console.error(error);
@@ -1826,6 +2022,7 @@ async function handleFeatureSubmit(event) {
 
     closeDialog("featureDialog");
     state.dirty = true;
+    saveSettings();
     await refreshLoop(true);
   } catch (error) {
     console.error(error);
@@ -1861,6 +2058,7 @@ async function handleEffectSubmit(event) {
 
     closeDialog("effectDialog");
     state.dirty = true;
+    saveSettings();
     await refreshLoop(true);
   } catch (error) {
     console.error(error);
@@ -1902,6 +2100,7 @@ async function deleteCanvasById(canvasId, dialogSource = null) {
   try {
     await fetchJson(`/api/canvases/${canvasId}`, { method: "DELETE" });
     state.dirty = true;
+    saveSettings();
     if (dialogSource) {
       dialogSource.close();
     }
@@ -1925,6 +2124,7 @@ async function deleteFeatureById(canvasId, featureId, dialogSource = null, skipC
   try {
     await fetchJson(`/api/canvases/${canvasId}/features/${featureId}`, { method: "DELETE" });
     state.dirty = true;
+    saveSettings();
     if (dialogSource) {
       dialogSource.close();
     }
@@ -1949,6 +2149,7 @@ async function deleteEffectByIndex(canvasId, effectIndex, dialogSource = null, s
   try {
     await fetchJson(`/api/canvases/${canvasId}/effects/${effectIndex}`, { method: "DELETE" });
     state.dirty = true;
+    saveSettings();
     if (dialogSource) {
       dialogSource.close();
     }

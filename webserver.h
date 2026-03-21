@@ -245,6 +245,33 @@ public:
                 }
             });
 
+        // Set the current effect index on a canvas (lightweight, no teardown)
+        CROW_ROUTE(_crowApp, "/api/canvases/<int>/currentEffect")
+            .methods(crow::HTTPMethod::POST)([&](const crow::request& req, int canvasId) -> crow::response
+            {
+                try
+                {
+                    auto reqJson = nlohmann::json::parse(req.body);
+                    int effectIndex = reqJson.at("effectIndex").get<int>();
+
+                    unique_lock writeLock(_apiMutex);
+                    auto canvas = _controller.GetCanvasById(static_cast<uint16_t>(canvasId));
+                    canvas->Effects().SetCurrentEffect(static_cast<size_t>(effectIndex), *canvas);
+                    PersistController(req);
+                    return crow::response(crow::OK);
+                }
+                catch (const out_of_range& e)
+                {
+                    logger->error("Error setting current effect on canvas {}: {}", canvasId, e.what());
+                    return crow::response(crow::NOT_FOUND, string("Error: ") + e.what());
+                }
+                catch (const exception& e)
+                {
+                    logger->error("Error setting current effect on canvas {}: {}", canvasId, e.what());
+                    return crow::response(crow::BAD_REQUEST, string("Error: ") + e.what());
+                }
+            });
+
         // Create new canvas
         CROW_ROUTE(_crowApp, "/api/canvases")
             .methods(crow::HTTPMethod::POST)([&](const crow::request& req) -> crow::response

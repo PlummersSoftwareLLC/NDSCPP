@@ -739,6 +739,36 @@ textarea {
     0 0 24px rgba(57, 255, 136, 0.18);
 }
 
+.nested-card.collapsed .section-header-grid {
+  border-bottom: none;
+}
+
+.preview-header-clickable {
+  cursor: pointer;
+}
+
+.preview-container {
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+  background: #000;
+  border-radius: 0 0 10px 10px;
+}
+
+.preview-canvas {
+  display: block;
+  image-rendering: pixelated;
+  border: 1px solid #444;
+}
+
+.effect-name-cell {
+  cursor: pointer;
+}
+
+.effect-name-cell:hover {
+  color: rgb(var(--card-rgb));
+}
+
 .nested-table-wrap {
   width: 100%;
 }

@@ -393,6 +393,45 @@ public:
                 }
             });
 
+        // Binary pixel data for canvas preview
+        // Header: uint16_t width, uint16_t height, uint16_t fps
+        // Body:   width*height * 3 bytes (RGB triplets, row-major)
+        CROW_ROUTE(_crowApp, "/api/canvases/<int>/pixels")
+            .methods(crow::HTTPMethod::GET)([this](int canvasId) -> crow::response
+            {
+                try
+                {
+                    shared_lock readLock(_apiMutex);
+                    auto canvas = _controller.GetCanvasById(canvasId);
+                    const auto &gfx = canvas->Graphics();
+                    const auto &pixels = gfx.GetPixels();
+                    uint16_t w = static_cast<uint16_t>(gfx.Width());
+                    uint16_t h = static_cast<uint16_t>(gfx.Height());
+                    uint16_t fps = static_cast<uint16_t>(canvas->Effects().GetFPS());
+
+                    // 6-byte header + 3 bytes per pixel
+                    string body;
+                    body.resize(6 + pixels.size() * 3);
+                    memcpy(&body[0], &w, 2);
+                    memcpy(&body[2], &h, 2);
+                    memcpy(&body[4], &fps, 2);
+                    memcpy(&body[6], pixels.data(), pixels.size() * 3);
+
+                    crow::response response(crow::OK, std::move(body));
+                    response.set_header("Content-Type", "application/octet-stream");
+                    response.set_header("Cache-Control", "no-store");
+                    return response;
+                }
+                catch (const out_of_range &e)
+                {
+                    return {crow::NOT_FOUND, string("Error: ") + e.what()};
+                }
+                catch (const exception &e)
+                {
+                    return {crow::BAD_REQUEST, string("Error: ") + e.what()};
+                }
+            });
+
         _crowApp.signal_clear();
         _serverFuture = _crowApp.port(_controller.GetWebUIPort()).multithreaded().run_async();
 
