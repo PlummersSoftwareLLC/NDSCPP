@@ -37,6 +37,16 @@ public:
         return ++_nextId;
     }
 
+    static void EnsureNextIdBeyond(uint32_t id)
+    {
+        uint32_t current = _nextId.load();
+        while (current < id)
+        {
+            if (_nextId.compare_exchange_weak(current, id))
+                break;
+        }
+    }
+
     string Name() const override
     {
         return _name;

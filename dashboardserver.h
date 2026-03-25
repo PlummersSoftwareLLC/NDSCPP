@@ -142,6 +142,9 @@ public:
                     for (const auto &canvasJson : canvasesJson)
                         _controller.AddCanvas(canvasJson.get<shared_ptr<ICanvas>>());
 
+                    _controller.Connect();
+                    _controller.Start(true);
+
                     _controller.WriteToFile(_controllerFileName);
                     return crow::response(crow::OK);
                 }
