@@ -61,7 +61,7 @@
         "typescript-eslint": "^8.13.0"
     },
     "overrides": {
-        "axios": "1.13.6",
+        "axios": "1.15.0",
         "minimatch@>=9.0.0 <9.0.6": "9.0.9",
         "picomatch@>=4.0.0 <=4.0.3": "4.0.4",
         "vite": "7.3.2"
