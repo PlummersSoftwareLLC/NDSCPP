@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NDSCPP Canvas Navigator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="backdrop"></div>
+  <div class="grid-overlay"></div>
+
+  <main class="shell">
+    <header class="topbar panel card-blue">
+      <div class="title-block">
+        <h1>NightDriver Web Control</h1>
+      </div>
+      <div class="status-cluster">
+        <div class="status-pill" id="connectionStatus">
+          <span class="status-dot"></span>
+          <span id="connectionStatusText">Waiting for data</span>
+        </div>
+        <div class="port-pill">
+          <span>API</span>
+          <strong id="apiPortValue">--</strong>
+        </div>
+        <div class="port-pill">
+          <span>WEB</span>
+          <strong id="webPortValue">--</strong>
+        </div>
+        <span class="split-button">
+          <button id="settingsToggle" class="settings-gear-button" type="button" title="Settings">&#x2699;</button>
+          <div id="settingsDropdownMenu" class="split-button-menu">
+            <button class="split-button-menu-item" type="button" data-settings-action="reset-page">&#x1F504; Reset Page</button>
+          </div>
+        </span>
+      </div>
+    </header>
+
+    <section class="toolbar panel card-orange">
+      <div class="toolbar-group">
+        <span class="toolbar-label">Load and Save</span>
+        <div class="button-group">
+          <button id="newConfigButton" class="action-button" type="button" title="New Configuration">&#x2795; New</button>
+          <span class="split-button">
+            <button id="loadConfigButton" class="action-button" type="button" title="Load Configuration">&#x1f4c2; Load</button>
+            <button id="loadDropdownToggle" class="action-button split-button-arrow" type="button" title="Load Options">&#x25BE;</button>
+            <div id="loadDropdownMenu" class="split-button-menu">
+              <button class="split-button-menu-item" type="button" data-load-mode="load">&#x1f4c2; Load &mdash; Replace All</button>
+              <button class="split-button-menu-item" type="button" data-load-mode="insert">&#x2795; Insert &mdash; Merge Into Current</button>
+            </div>
+          </span>
+          <button id="saveConfigButton" class="action-button" type="button" title="Save Configuration">&#x1f4be; Save</button>
+        </div>
+      </div>
+      <div class="toolbar-group">
+        <span class="toolbar-label">Refresh</span>
+        <div class="toolbar-row">
+          <div class="button-group">
+            <span class="split-button">
+              <button id="refreshIntervalButton" class="action-button" type="button" title="Refresh Interval">&#x23F1; 2 sec</button>
+              <button id="refreshDropdownToggle" class="action-button split-button-arrow" type="button" title="Interval Options">&#x25BE;</button>
+              <div id="refreshDropdownMenu" class="split-button-menu">
+                <button class="split-button-menu-item" type="button" data-interval="1000">1 sec</button>
+                <button class="split-button-menu-item" type="button" data-interval="2000">2 sec</button>
+                <button class="split-button-menu-item" type="button" data-interval="5000">5 sec</button>
+                <button class="split-button-menu-item" type="button" data-interval="10000">10 sec</button>
+              </div>
+            </span>
+          </div>
+          <label class="toggle">
+            <input id="autoRefreshToggle" type="checkbox" checked>
+            <span>Auto</span>
+          </label>
+        </div>
+      </div>
+      <div class="button-group">
+        <button id="refreshButton" class="action-button" type="button" title="Refresh Now">&#x21bb; Refresh</button>
+        <button id="startAllButton" class="action-button accent" type="button" title="Start All Canvases">&#x25b6; Start</button>
+        <button id="stopAllButton" class="action-button warning" type="button" title="Stop All Canvases">&#x25a0; Stop</button>
+      </div>
+      <label class="field" style="margin-left: auto;">
+        <span>Filter</span>
+        <input id="filterInput" type="search" placeholder="Canvas, feature, host, effect">
+      </label>
+      <input id="configFileInput" type="file" accept=".led,.json" hidden>
+    </section>
+
+    <section class="summary-grid">
+      <article class="summary-card panel card-red">
+        <span class="summary-label">Canvases</span>
+        <strong class="summary-value" id="summaryCanvases">0</strong>
+        <span class="summary-note" id="summaryCanvasesNote">Configured surfaces</span>
+      </article>
+      <article class="summary-card panel card-yellow">
+        <span class="summary-label">Features</span>
+        <strong class="summary-value" id="summaryFeatures">0</strong>
+        <span class="summary-note" id="summaryFeaturesNote">Addressable segments</span>
+      </article>
+      <article class="summary-card panel card-green">
+        <span class="summary-label">Online</span>
+        <strong class="summary-value" id="summaryOnline">0</strong>
+        <span class="summary-note" id="summaryOnlineNote">Responsive clients</span>
+      </article>
+      <article class="summary-card panel card-cyan">
+        <span class="summary-label">Avg FPS</span>
+        <strong class="summary-value" id="summaryFps">--</strong>
+        <span class="summary-note" id="summaryFpsNote">Measured / target</span>
+      </article>
+      <article class="summary-card panel card-orange">
+        <span class="summary-label">Bandwidth</span>
+        <strong class="summary-value" id="summaryBandwidth">0 B/s</strong>
+        <span class="summary-note" id="summaryBandwidthNote">Aggregate output</span>
+      </article>
+      <article class="summary-card panel card-purple">
+        <span class="summary-label">Max Queue</span>
+        <strong class="summary-value" id="summaryQueue">0</strong>
+        <span class="summary-note" id="summaryQueueNote">Deepest client queue</span>
+      </article>
+      <article class="summary-card panel card-pink">
+        <span class="summary-label">Worst Delta</span>
+        <strong class="summary-value" id="summaryDelta">--</strong>
+        <span class="summary-note" id="summaryDeltaNote">Clock drift envelope</span>
+      </article>
+      <article class="summary-card panel card-blue">
+        <span class="summary-label">Effects</span>
+        <strong class="summary-value" id="summaryEffects">0</strong>
+        <span class="summary-note" id="summaryEffectsNote">Distinct active effects</span>
+      </article>
+    </section>
+
+    <section class="main-grid">
+      <article class="panel table-panel card-green">
+        <div class="panel-header">
+          <div>
+            <h2>Canvases</h2>
+          </div>
+          <div class="panel-meta" id="tableMetaText">0 canvases</div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="canvas-table">
+            <thead>
+              <tr>
+                <th class="checkbox-cell"></th>
+                <th class="expander-column"></th>
+                <th><button type="button" class="sort-button" data-sort-key="name">Canvas Name</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="dimensions">Dimensions</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="featureCount">Features</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="effectCount">Effects</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="currentEffectName">Current Effect</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="fps">FPS</button></th>
+                <th><button type="button" class="sort-button" data-sort-key="status">Status</button></th>
+              </tr>
+            </thead>
+            <tbody id="canvasTableBody">
+              <tr>
+                <td colspan="9" class="empty-cell">No canvases loaded.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="canvasFolderTab"></div>
+      </article>
+    </section>
+  </main>
+
+  <dialog id="canvasDialog" class="editor-dialog">
+    <form id="canvasForm" class="dialog-shell panel card-red" method="dialog" novalidate>
+      <header class="dialog-header">
+        <div>
+          <p class="eyebrow" id="canvasDialogEyebrow">Canvas Builder</p>
+          <h2 id="canvasDialogTitle">Create Canvas</h2>
+          <p class="dialog-copy" id="canvasDialogCopy">Define the canvas dimensions, timing, and optional first feature.</p>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog="canvasDialog">Close</button>
+      </header>
+
+      <div class="dialog-grid">
+        <label class="field">
+          <span>Name</span>
+          <input id="canvasNameInput" type="text" autocomplete="off" required>
+        </label>
+        <label class="field">
+          <span>Width (X)</span>
+          <input id="canvasWidthInput" type="number" min="1" step="1" required>
+        </label>
+        <label class="field">
+          <span>Height (Y)</span>
+          <input id="canvasHeightInput" type="number" min="1" step="1" required>
+        </label>
+        <label class="field">
+          <span>FPS</span>
+          <input id="canvasFpsInput" type="number" min="1" step="1" required>
+        </label>
+        <label class="toggle dialog-toggle">
+          <input id="canvasRunningInput" type="checkbox" checked>
+          <span>Run Effects After Save</span>
+        </label>
+      </div>
+
+      <section class="subpanel" id="canvasSeedFeatureSection">
+        <div class="subpanel-header">
+          <div>
+            <p class="eyebrow">Initial Feature</p>
+            <h3>Seed The Canvas</h3>
+          </div>
+          <label class="toggle dialog-toggle">
+            <input id="canvasSeedFeatureEnabled" type="checkbox">
+            <span>Create First Feature</span>
+          </label>
+        </div>
+
+        <div class="dialog-grid compact-grid">
+          <label class="field">
+            <span>Feature Name</span>
+            <input id="seedFeatureFriendlyNameInput" type="text" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Host</span>
+            <input id="seedFeatureHostNameInput" type="text" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>Port</span>
+            <input id="seedFeaturePortInput" type="number" min="1" step="1" value="49152">
+          </label>
+          <label class="field">
+            <span>Width</span>
+            <input id="seedFeatureWidthInput" type="number" min="1" step="1">
+          </label>
+          <label class="field">
+            <span>Height</span>
+            <input id="seedFeatureHeightInput" type="number" min="1" step="1" value="1">
+          </label>
+          <label class="field">
+            <span>Offset X</span>
+            <input id="seedFeatureOffsetXInput" type="number" min="0" step="1" value="0">
+          </label>
+          <label class="field">
+            <span>Offset Y</span>
+            <input id="seedFeatureOffsetYInput" type="number" min="0" step="1" value="0">
+          </label>
+          <label class="field">
+            <span>Channel</span>
+            <input id="seedFeatureChannelInput" type="number" min="0" step="1" value="0">
+          </label>
+          <label class="field">
+            <span>Buffer Depth</span>
+            <input id="seedFeatureClientBufferCountInput" type="number" min="1" step="1" value="8">
+          </label>
+          <label class="toggle dialog-toggle">
+            <input id="seedFeatureReversedInput" type="checkbox">
+            <span>Reversed</span>
+          </label>
+          <label class="toggle dialog-toggle">
+            <input id="seedFeatureRedGreenSwapInput" type="checkbox">
+            <span>Red/Green Swap</span>
+          </label>
+        </div>
+      </section>
+
+      <p class="dialog-message" id="canvasDialogMessage"></p>
+
+      <footer class="dialog-footer">
+        <button id="canvasDeleteButton" class="action-button warning" type="button" hidden>Delete Canvas</button>
+        <button class="action-button" type="button" data-close-dialog="canvasDialog">Cancel</button>
+        <button id="canvasSaveButton" class="action-button accent" type="submit">Save Canvas</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="featureDialog" class="editor-dialog">
+    <form id="featureForm" class="dialog-shell panel card-green" method="dialog" novalidate>
+      <header class="dialog-header">
+        <div>
+          <p class="eyebrow" id="featureDialogEyebrow">Feature Editor</p>
+          <h2 id="featureDialogTitle">Add Feature</h2>
+          <p class="dialog-copy" id="featureDialogCopy">Attach a socket-backed feature to the selected canvas.</p>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog="featureDialog">Close</button>
+      </header>
+
+      <div class="dialog-grid compact-grid">
+        <label class="field">
+          <span>Feature Name</span>
+          <input id="featureFriendlyNameInput" type="text" autocomplete="off" required>
+        </label>
+        <label class="field">
+          <span>Host</span>
+          <input id="featureHostNameInput" type="text" autocomplete="off" required>
+        </label>
+        <label class="field">
+          <span>Port</span>
+          <input id="featurePortInput" type="number" min="1" step="1" value="49152" required>
+        </label>
+        <label class="field">
+          <span>Width</span>
+          <input id="featureWidthInput" type="number" min="1" step="1" required>
+        </label>
+        <label class="field">
+          <span>Height</span>
+          <input id="featureHeightInput" type="number" min="1" step="1" value="1" required>
+        </label>
+        <label class="field">
+          <span>Offset X</span>
+          <input id="featureOffsetXInput" type="number" min="0" step="1" value="0" required>
+        </label>
+        <label class="field">
+          <span>Offset Y</span>
+          <input id="featureOffsetYInput" type="number" min="0" step="1" value="0" required>
+        </label>
+        <label class="field">
+          <span>Channel</span>
+          <input id="featureChannelInput" type="number" min="0" step="1" value="0" required>
+        </label>
+        <label class="field">
+          <span>Buffer Depth</span>
+          <input id="featureClientBufferCountInput" type="number" min="1" step="1" value="8" required>
+        </label>
+        <label class="toggle dialog-toggle">
+          <input id="featureReversedInput" type="checkbox">
+          <span>Reversed</span>
+        </label>
+        <label class="toggle dialog-toggle">
+          <input id="featureRedGreenSwapInput" type="checkbox">
+          <span>Red/Green Swap</span>
+        </label>
+      </div>
+
+      <p class="dialog-message" id="featureDialogMessage"></p>
+
+      <footer class="dialog-footer">
+        <button id="featureDeleteButton" class="action-button warning" type="button" hidden>Delete Feature</button>
+        <button class="action-button" type="button" data-close-dialog="featureDialog">Cancel</button>
+        <button id="featureSaveButton" class="action-button accent" type="submit">Save Feature</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="effectDialog" class="editor-dialog">
+    <form id="effectForm" class="dialog-shell panel card-cyan" method="dialog" novalidate>
+      <header class="dialog-header">
+        <div>
+          <p class="eyebrow" id="effectDialogEyebrow">Effect Editor</p>
+          <h2 id="effectDialogTitle">Add Effect</h2>
+          <p class="dialog-copy" id="effectDialogCopy">Tune the effect payload and optional schedule.</p>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog="effectDialog">Close</button>
+      </header>
+
+      <div class="dialog-grid">
+        <label class="field">
+          <span>Effect Type</span>
+          <select id="effectTypeInput"></select>
+        </label>
+        <label class="field">
+          <span>Name</span>
+          <input id="effectNameInput" type="text" autocomplete="off" required>
+        </label>
+      </div>
+
+      <div class="dynamic-fields" id="effectFields"></div>
+
+      <section class="subpanel">
+        <div class="subpanel-header">
+          <div>
+            <p class="eyebrow">Schedule</p>
+            <h3>Optional Runtime Window</h3>
+          </div>
+        </div>
+
+        <div class="days-grid" id="effectScheduleDays"></div>
+
+        <div class="dialog-grid compact-grid">
+          <label class="field">
+            <span>Start Time</span>
+            <input id="effectScheduleStartTimeInput" type="time">
+          </label>
+          <label class="field">
+            <span>Stop Time</span>
+            <input id="effectScheduleStopTimeInput" type="time">
+          </label>
+          <label class="field">
+            <span>Start Date</span>
+            <input id="effectScheduleStartDateInput" type="date">
+          </label>
+          <label class="field">
+            <span>Stop Date</span>
+            <input id="effectScheduleStopDateInput" type="date">
+          </label>
+        </div>
+      </section>
+
+      <p class="dialog-message" id="effectDialogMessage"></p>
+
+      <footer class="dialog-footer">
+        <button id="effectDeleteButton" class="action-button warning" type="button" hidden>Delete Effect</button>
+        <button class="action-button" type="button" data-close-dialog="effectDialog">Cancel</button>
+        <button id="effectSaveButton" class="action-button accent" type="submit">Save Effect</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="collisionDialog" class="editor-dialog">
+    <div class="dialog-shell panel card-yellow" style="max-width: 480px;">
+      <header class="dialog-header">
+        <div>
+          <p class="eyebrow">Canvas Conflict</p>
+          <h2 id="collisionDialogTitle">Duplicate Canvas</h2>
+          <p class="dialog-copy" id="collisionDialogCopy"></p>
+        </div>
+      </header>
+      <label class="toggle dialog-toggle">
+        <input id="collisionRepeatCheckbox" type="checkbox">
+        <span>Apply to all remaining conflicts</span>
+      </label>
+      <footer class="dialog-footer">
+        <button id="collisionNoButton" class="action-button" type="button">No &mdash; Skip</button>
+        <button id="collisionYesButton" class="action-button accent" type="button">Yes &mdash; Overwrite</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

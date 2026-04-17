@@ -32,15 +32,18 @@ class Controller : public IController
 
     vector<shared_ptr<ICanvas>> _canvases;
     uint16_t                    _port;
+    uint16_t                    _webUiPort;
     mutable mutex               _canvasMutex;
 
   public:
 
-    Controller(uint16_t port = 7777) : _port(port)
+    Controller(uint16_t port, uint16_t webUiPort = 9997)
+        : _port(port),
+          _webUiPort(webUiPort)
     {
     }
 
-    Controller() : _port(7777) 
+    Controller() : Controller(7777, 9997)
     {
     }
 
@@ -84,6 +87,16 @@ class Controller : public IController
     void SetPort(uint16_t port) override
     {
         _port = port;
+    }
+
+    uint16_t GetWebUIPort() const override
+    {
+        return _webUiPort;
+    }
+
+    void SetWebUIPort(uint16_t port) override
+    {
+        _webUiPort = port;
     }
 
     bool AddFeatureToCanvas(uint16_t canvasId, shared_ptr<ILEDFeature> feature) override
@@ -408,9 +421,6 @@ class Controller : public IController
     {
         logger->debug("Adding canvas {}...", ptrCanvas->Name());
 
-        // This is a bit odd; we try get the current canvas with the ID specified by the new one,
-        // and we only proceed in the exception case if the canvas doesn't exist, where we add it
-
         lock_guard lock(_canvasMutex);
         try
         {
@@ -420,10 +430,9 @@ class Controller : public IController
         }
         catch(const out_of_range &)               
         {
-            auto newId = Canvas::NextId();
-            ptrCanvas->SetId(newId);
-            _canvases.push_back(ptrCanvas);    
-            return newId;
+            _canvases.push_back(ptrCanvas);
+            Canvas::EnsureNextIdBeyond(ptrCanvas->Id());
+            return ptrCanvas->Id();
         }
     }
 
@@ -454,6 +463,20 @@ class Controller : public IController
         }
     }
 
+    void ClearAllCanvases() override
+    {
+        lock_guard lock(_canvasMutex);
+        logger->debug("Clearing all canvases...");
+
+        for (auto &canvas : _canvases)
+        {
+            canvas->Effects().Stop();
+            for (auto &feature : canvas->Features())
+                feature->Socket()->Stop();
+        }
+        _canvases.clear();
+    }
+
     bool UpdateCanvas(shared_ptr<ICanvas> ptrCanvas) override
     {
         logger->debug("Updating canvas {}...", ptrCanvas->Name());
@@ -465,7 +488,19 @@ class Controller : public IController
             auto canvasId = ptrCanvas->Id();
             for (size_t i = 0; i < _canvases.size(); ++i) {
                 if (_canvases[i]->Id() == canvasId) {
+                    auto oldCanvas = _canvases[i];
+                    oldCanvas->Effects().Stop();
+                    for (auto &feature : oldCanvas->Features())
+                        feature->Socket()->Stop();
+
                     _canvases[i] = ptrCanvas;
+
+                    for (auto &feature : ptrCanvas->Features())
+                        feature->Socket()->Start();
+
+                    if (ptrCanvas->Effects().WantsToRun() && ptrCanvas->Effects().EffectCount() > 0)
+                        ptrCanvas->Effects().Start(*ptrCanvas);
+
                     return true;
                 }
             }
@@ -518,6 +553,8 @@ inline void to_json(nlohmann::json &j, const IController &controller)
     try
     {
         j["port"] = controller.GetPort();
+        j["webuiport"] = controller.GetWebUIPort();
+        j["canvases"] = nlohmann::json::array();
         for (const auto &canvas : controller.Canvases())
             j["canvases"].push_back(*canvas);
     }
@@ -535,12 +572,13 @@ inline void from_json(const nlohmann::json &j, unique_ptr<Controller> & ptrContr
     {
         // Extract port
         uint16_t port = j.at("port").get<uint16_t>();
+        uint16_t webUiPort = j.value("webuiport", uint16_t(9997));
 
         // Create controller
-        ptrController = make_unique<Controller>(port);
+        ptrController = make_unique<Controller>(port, webUiPort);
 
         // Extract canvases
-        for (const auto &canvasJson : j.at("canvases"))
+        for (const auto &canvasJson : j.value("canvases", nlohmann::json::array()))
             ptrController->AddCanvas(canvasJson.get<shared_ptr<ICanvas>>());
     } 
     catch (const exception &e) 

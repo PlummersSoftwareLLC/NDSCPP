@@ -598,3 +598,112 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
     );
     ASSERT_EQ(deleteCanvasResponse.status_code, 200);
 }
+
+TEST_F(APITest, CanvasUpdatePreservesFeatures)
+{
+    json canvasData = {
+        {"id", -1},
+        {"name", "Editable Canvas " + std::to_string(std::time(nullptr))},
+        {"width", 64},
+        {"height", 8}
+    };
+
+    auto createCanvasResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases"},
+        cpr::Body{canvasData.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(createCanvasResponse.status_code, 201);
+    const int canvasId = json::parse(createCanvasResponse.text)["id"].get<int>();
+
+    json featureData = {
+        {"hostName", "update-test-host"},
+        {"friendlyName", "Editable Feature"},
+        {"port", 1234},
+        {"width", 32},
+        {"height", 4},
+        {"offsetX", 10},
+        {"offsetY", 2},
+        {"reversed", false},
+        {"channel", 1},
+        {"redGreenSwap", false},
+        {"clientBufferCount", 16}
+    };
+
+    auto createFeatureResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/features"},
+        cpr::Body{featureData.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(createFeatureResponse.status_code, 200);
+    const int featureId = json::parse(createFeatureResponse.text)["id"].get<int>();
+
+    auto getCanvasResponse = cpr::Get(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        noPersistParam
+    );
+    ASSERT_EQ(getCanvasResponse.status_code, 200);
+
+    auto canvasJson = json::parse(getCanvasResponse.text);
+    canvasJson["name"] = "Updated Canvas";
+    canvasJson["width"] = 96;
+    canvasJson["height"] = 12;
+    canvasJson["effectsManager"]["fps"] = 48;
+    canvasJson["effectsManager"]["running"] = false;
+
+    auto updateResponse = cpr::Put(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        cpr::Body{canvasJson.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(updateResponse.status_code, 200);
+
+    auto updatedCanvas = json::parse(updateResponse.text);
+    ASSERT_EQ(updatedCanvas["name"], "Updated Canvas");
+    ASSERT_EQ(updatedCanvas["width"], 96);
+    ASSERT_EQ(updatedCanvas["height"], 12);
+    ASSERT_EQ(updatedCanvas["effectsManager"]["fps"], 48);
+    ASSERT_EQ(updatedCanvas["features"].size(), static_cast<size_t>(1));
+    ASSERT_EQ(updatedCanvas["features"][0]["id"], featureId);
+    ASSERT_EQ(updatedCanvas["features"][0]["friendlyName"], "Editable Feature");
+
+    auto deleteCanvasResponse = cpr::Delete(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        noPersistParam
+    );
+    ASSERT_EQ(deleteCanvasResponse.status_code, 200);
+}
+
+TEST_F(APITest, EffectCatalogExposesDefinitions)
+{
+    auto response = cpr::Get(
+        cpr::Url{BASE_URL + "/effects/catalog"},
+        noPersistParam
+    );
+
+    ASSERT_EQ(response.status_code, 200);
+    auto catalogJson = json::parse(response.text);
+    ASSERT_TRUE(catalogJson.contains("effects"));
+    ASSERT_FALSE(catalogJson["effects"].empty());
+
+    bool foundSolidColorFill = false;
+    bool foundPaletteEditorField = false;
+
+    for (const auto &effect : catalogJson["effects"])
+    {
+        if (effect["label"] == "Solid Color Fill")
+            foundSolidColorFill = true;
+
+        if (effect["label"] == "Palette Scroll")
+        {
+            for (const auto &field : effect["fields"])
+            {
+                if (field["path"] == "palette.colors")
+                    foundPaletteEditorField = true;
+            }
+        }
+    }
+
+    ASSERT_TRUE(foundSolidColorFill);
+    ASSERT_TRUE(foundPaletteEditorField);
+}

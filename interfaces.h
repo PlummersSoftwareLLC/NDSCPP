@@ -194,6 +194,7 @@ public:
     virtual ~ILEDFeature() = default;
 
     virtual uint32_t Id() const = 0;
+    virtual uint32_t SetId(uint32_t id) = 0;
 
     // Accessor methods
     virtual uint32_t Width() const = 0;
@@ -259,10 +260,13 @@ public:
 
     virtual uint16_t GetPort() const = 0;
     virtual void     SetPort(uint16_t port) = 0;
+    virtual uint16_t GetWebUIPort() const = 0;
+    virtual void     SetWebUIPort(uint16_t port) = 0;
 
     virtual vector<shared_ptr<ICanvas>> Canvases() const = 0;
     virtual uint32_t AddCanvas(shared_ptr<ICanvas> ptrCanvas) = 0;
     virtual bool DeleteCanvasById(uint32_t id) = 0;
+    virtual void ClearAllCanvases() = 0;
     virtual bool UpdateCanvas(shared_ptr<ICanvas> ptrCanvas) = 0;
     virtual bool AddFeatureToCanvas(uint16_t canvasId, shared_ptr<ILEDFeature> feature) = 0;
     virtual void RemoveFeatureFromCanvas(uint16_t canvasId, uint16_t featureId) = 0;

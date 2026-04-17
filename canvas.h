@@ -37,6 +37,16 @@ public:
         return ++_nextId;
     }
 
+    static void EnsureNextIdBeyond(uint32_t id)
+    {
+        uint32_t current = _nextId.load();
+        while (current < id)
+        {
+            if (_nextId.compare_exchange_weak(current, id))
+                break;
+        }
+    }
+
     string Name() const override
     {
         return _name;
@@ -149,12 +159,18 @@ inline void to_json(nlohmann::json& j, const shared_ptr<ICanvas>& canvasPtr)
 
 inline void from_json(const nlohmann::json& j, shared_ptr<ICanvas> & canvas) 
 {
+    const auto canvasId = j.value("id", uint32_t(0));
+    const auto canvasName = j.value("name", str_snprintf("Canvas %u", 32, canvasId));
+
     // Create canvas with required fields.
     canvas = make_shared<Canvas>(
-        j.at("name").get<string>(),
+        canvasName,
         j.at("width").get<uint32_t>(),
         j.at("height").get<uint32_t>()
     );
+
+    if (j.contains("id"))
+        canvas->SetId(canvasId);
 
     // Features()
     for (const auto& featureJson : j.value("features", nlohmann::json::array()))
