@@ -48,10 +48,10 @@ private:
     private:
         static double GetCurrentTime()
         {
-            return static_cast<double>(chrono::duration_cast<chrono::milliseconds>(
+            return static_cast<double>(chrono::duration_cast<chrono::microseconds>(
                                            chrono::steady_clock::now().time_since_epoch())
                                            .count()) /
-                   1000.0;
+                   1000000.0;
         }
     };
 
@@ -92,7 +92,7 @@ public:
     {
     }
 
-    void Update(ICanvas &canvas, milliseconds deltaTime) override
+    void Update(ICanvas &canvas, microseconds deltaTime) override
     {
         const auto ledCount = canvas.Graphics().Width() * canvas.Graphics().Height();
 
@@ -133,7 +133,7 @@ public:
             Particle particle = _particles.front();
             _particles.pop();
 
-            particle.Update(deltaTime.count() / 1000.0);
+            particle.Update(deltaTime.count() / 1000000.0);
             CRGB color = particle._starColor;
 
             double fade = 0.0;

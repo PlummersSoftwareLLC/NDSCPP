@@ -25,7 +25,7 @@ public:
     {
     }
 
-    void Update(ICanvas& canvas, milliseconds deltaTime) override
+    void Update(ICanvas& canvas, microseconds deltaTime) override
     {
         canvas.Graphics().Clear(_color);
     }

@@ -251,7 +251,7 @@ public:
             }
             
             // Small sleep to prevent CPU spinning
-            std::this_thread::sleep_for(milliseconds(_fps > 0 ? static_cast<int>(1000.0 / _fps) : 100));
+            std::this_thread::sleep_for(microseconds(_fps > 0 ? static_cast<long long>(1000000.0 / _fps) : 100000LL));
         }
     }
 };

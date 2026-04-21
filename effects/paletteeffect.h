@@ -59,7 +59,7 @@ public:
     {
     }
 
-    void Update(ICanvas& canvas, milliseconds deltaTime) override 
+    void Update(ICanvas& canvas, microseconds deltaTime) override 
     {
         auto& graphics = canvas.Graphics();
         const auto width = graphics.Width();
@@ -69,7 +69,7 @@ public:
         graphics.Clear(CRGB::Black);
 
         // Pre-calculate constants
-        const double secondsElapsed = deltaTime.count() / 1000.0;
+        const double secondsElapsed = deltaTime.count() / 1000000.0;
         const double cPixelsToScroll = secondsElapsed * _LEDScrollSpeed;
         const double cColorsToScroll = secondsElapsed * _LEDColorPerSecond;
         const uint32_t cLength = (_Mirrored ? dotcount / 2 : dotcount);
