@@ -29,7 +29,7 @@ class WebServer
         {
             if (req.url.starts_with("/api/"))
                 res.set_header("Content-Type", "application/json");
-            
+
             res.add_header("Access-Control-Allow-Origin", "*");
             res.add_header("Access-Control-Allow-Methods", "GET, OPTIONS, POST, DELETE");
             res.add_header("Access-Control-Allow-Headers", "Content-Type");
@@ -324,14 +324,14 @@ public:
             });
 
         CROW_ROUTE(_crowApp, "/")
-        ([](const crow::request&, crow::response& res) 
+        ([](const crow::request&, crow::response& res)
         {
             res.set_static_file_info("static/index.html");
             res.end();
         });
 
         CROW_ROUTE(_crowApp, "/<path>")
-        ([](const crow::request&, crow::response& res, string path) 
+        ([](const crow::request&, crow::response& res, string path)
         {
             res.set_static_file_info("static/" + path);
             res.end();
