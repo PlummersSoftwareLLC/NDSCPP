@@ -12,14 +12,16 @@ class LEDEffectBase : public ILEDEffect
 {
 protected:
     string _name;
+    string _type;
     shared_ptr<ISchedule> _ptrSchedule = nullptr;
 
 public:
-    LEDEffectBase(const string& name) : _name(name) {}
+    LEDEffectBase(const string& name, const string& type = "LEDEffectBase") : _name(name), _type(type) {}
 
     virtual ~LEDEffectBase() = default;
 
     const string& Name() const override { return _name; }
+    string Type() const override { return _type; }
 
     // Default implementation for Start does nothing
     void Start(ICanvas& canvas) override 
@@ -27,7 +29,7 @@ public:
     }
 
     // Default implementation for Update does nothing
-    void Update(ICanvas& canvas, milliseconds deltaTime) override 
+    void Update(ICanvas& canvas, microseconds deltaTime) override 
     {
     }
 

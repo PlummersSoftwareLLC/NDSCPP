@@ -54,14 +54,14 @@ public:
         {
             _height[i] = StartHeight;
             _impactVelocity[i] = ImpactVelocityStart;
-            _clockTimeSinceLastBounce[i] = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+            _clockTimeSinceLastBounce[i] = duration_cast<microseconds>(system_clock::now().time_since_epoch()).count();
             _dampening[i] = 1.0f - static_cast<float>(i) / powf(static_cast<float>(_ballCount), 2.0f);
             _timeSinceLastBounce[i] = 0;
             _colors[i] = BallColors[i % BallColors.size()];
         }
     }
 
-    void Update(ICanvas& canvas, milliseconds deltaTime) override
+    void Update(ICanvas& canvas, microseconds deltaTime) override
     {
         auto& graphics = canvas.Graphics();
         size_t length = graphics.Width();
@@ -81,7 +81,7 @@ public:
         // Draw each ball
         for (size_t i = 0; i < _ballCount; ++i)
         {
-            _timeSinceLastBounce[i] += deltaTime.count() / 1000.0; // Convert to seconds
+            _timeSinceLastBounce[i] += deltaTime.count() / 1000000.0; // Convert to seconds
             _height[i] = 0.5f * Gravity * powf(_timeSinceLastBounce[i], 2.0f) + _impactVelocity[i] * _timeSinceLastBounce[i];
 
             if (_height[i] < 0)

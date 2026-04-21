@@ -24,10 +24,10 @@ public:
         _hue = 0.0;
     }
 
-    void Update(ICanvas& canvas, milliseconds deltaTime) override
+    void Update(ICanvas& canvas, microseconds deltaTime) override
     {
         // Increment the hue based on speed and elapsed time
-        _hue += _speed * deltaTime.count() / 1000.0;
+        _hue += _speed * deltaTime.count() / 1000000.0;
         if (_hue >= 1.0) _hue -= 1.0; // Wrap around hue to stay in [0, 1)
 
         auto& graphics = canvas.Graphics();

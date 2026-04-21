@@ -106,11 +106,14 @@ public:
     // Get the name of the effect
     virtual const string& Name() const = 0;
 
+    // Get the type of the effect
+    virtual string Type() const = 0;
+
     // Called when the effect starts
     virtual void Start(ICanvas& canvas) = 0;
 
     // Called to update the effect, given a canvas and timestamp
-    virtual void Update(ICanvas& canvas, milliseconds deltaTime) = 0;
+    virtual void Update(ICanvas& canvas, microseconds deltaTime) = 0;
 
     virtual void SetSchedule(const shared_ptr<ISchedule> pSchedule) = 0;
     virtual const shared_ptr<ISchedule> GetSchedule() const = 0;
@@ -133,7 +136,7 @@ public:
     virtual size_t GetCurrentEffect() const = 0;
     virtual size_t EffectCount() const = 0;
     virtual vector<shared_ptr<ILEDEffect>> Effects() const = 0;
-    virtual void UpdateCurrentEffect(ICanvas& canvas, milliseconds millisDelta) = 0;
+    virtual void UpdateCurrentEffect(ICanvas& canvas, microseconds microsDelta) = 0;
     virtual void NextEffect() = 0;
     virtual void PreviousEffect() = 0;
     virtual string CurrentEffectName() const = 0;
@@ -211,8 +214,7 @@ public:
 
     // Data retrieval
     virtual vector<uint8_t> GetPixelData() const = 0;
-    virtual vector<uint8_t> GetDataFrame() const = 0;    
-
+    virtual vector<uint8_t> GetDataFrame(system_clock::time_point targetTime) const = 0;
     virtual shared_ptr<ISocketChannel> Socket() = 0;
     virtual const shared_ptr<ISocketChannel> Socket() const = 0;
 
