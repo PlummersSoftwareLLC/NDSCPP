@@ -131,7 +131,7 @@ constexpr uint8_t lerp8by8(uint8_t a, uint8_t b, fract8 frac)
 
 /// Forward declaration of hsv2rgb_rainbow here,
 /// to avoid circular dependencies.
-inline void hsv2rgb_rainbow(const CHSV & hsv, CRGB & rgb, bool fast);
+inline void hsv2rgb_rainbow(const CHSV & hsv, CRGB & rgb, bool fast = true);
 
 typedef enum
 {
@@ -421,10 +421,9 @@ struct CRGB
 
     constexpr CRGB blendWith(const CRGB &other, double blendFactor) const
     {
-        return CRGB(
-            static_cast<uint8_t>(r * (1 - blendFactor) + other.r * blendFactor),
-            static_cast<uint8_t>(g * (1 - blendFactor) + other.g * blendFactor),
-            static_cast<uint8_t>(b * (1 - blendFactor) + other.b * blendFactor));
+        if (blendFactor <= 0.0) return *this;
+        if (blendFactor >= 1.0) return other;
+        return lerp8(other, static_cast<uint8_t>(blendFactor * 255.0));
     }
 
     /// Allow assignment from red, green, and blue
@@ -477,34 +476,19 @@ struct CRGB
 
     static CRGB HSV2RGB(double h, double s = 1.0, double v = 1.0)
     {
-        h = fmod(h, 360.0); // Ensure h is in the range [0, 360)
-        if (h < 0)
-            h += 360.0;
+        // Normalize h to [0, 1) range for hue conversion
+        double h_norm = h / 360.0;
+        h_norm -= floor(h_norm);
+        if (h_norm < 0) h_norm += 1.0;
 
-        uint8_t hi = static_cast<uint8_t>(h / 60.0) % 6;
-        double f = (h / 60.0) - hi;
-        uint8_t p = static_cast<uint8_t>(v * (1.0 - s) * 255);
-        uint8_t q = static_cast<uint8_t>(v * (1.0 - f * s) * 255);
-        uint8_t t = static_cast<uint8_t>(v * (1.0 - (1.0 - f) * s) * 255);
-        uint8_t vByte = static_cast<uint8_t>(v * 255);
+        CHSV hsv(
+            static_cast<uint8_t>(h_norm * 255.0),
+            static_cast<uint8_t>(s * 255.0),
+            static_cast<uint8_t>(v * 255.0));
 
-        switch (hi)
-        {
-        case 0:
-            return CRGB(vByte, t, p);
-        case 1:
-            return CRGB(q, vByte, p);
-        case 2:
-            return CRGB(p, vByte, t);
-        case 3:
-            return CRGB(p, q, vByte);
-        case 4:
-            return CRGB(t, p, vByte);
-        case 5:
-            return CRGB(vByte, p, q);
-        default:
-            return CRGB(0, 0, 0); // Should never reach here
-        }
+        CRGB rgb;
+        hsv2rgb_rainbow(hsv, rgb, true);
+        return rgb;
     }
 
     /// Add one CRGB to another, saturating at 0xFF for each channel
@@ -1267,7 +1251,7 @@ constexpr array<uint8_t, 256> HSV_SINE_TABLE =
 // The "fast" flag causes the code to use a minimal (and thus faster)
 // set of transitions.  I think Ken Fishkin originally came up with it.
 
-inline void hsv2rgb_rainbow(const CHSV & hsv, CRGB & rgb, bool fast = false) 
+inline void hsv2rgb_rainbow(const CHSV & hsv, CRGB & rgb, bool fast) 
 {
     if (fast) 
     {
@@ -1299,7 +1283,7 @@ inline void hsv2rgb_rainbow(const CHSV & hsv, CRGB & rgb, bool fast = false)
     } 
     else 
     {
-        // Original smooth floating-point conversion
+        // Smooth floating-point conversion
         float h = hsv.h * (6.0f / 256.0f);
         float s = hsv.s * (1.0f / 255.0f);
         float v = hsv.v * (1.0f / 255.0f);
