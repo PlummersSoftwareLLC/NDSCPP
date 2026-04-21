@@ -70,8 +70,10 @@ public:
         // Note: localTime->tm_wday: Sunday == 0, Monday == 1, etc.
         if (daysOfWeek) {
             uint8_t todayBit = 1 << localTime->tm_wday;
-            if (!(*daysOfWeek & todayBit))
+            if (!(*daysOfWeek & todayBit)) {
+                logger->debug("Schedule inactive: day bit {} not in mask {}", todayBit, *daysOfWeek);
                 return false;
+            }
         }
 
         // Format current date and time as strings in "YYYY-MM-DD" and "HH:MM:SS" formats.
@@ -82,18 +84,36 @@ public:
         string currentTime = timeStream.str();
 
         // Check start and stop dates if set.
-        if (startDate && currentDate < *startDate)
+        if (startDate && currentDate < *startDate) {
             return false;
+        }
 
-        if (stopDate && currentDate > *stopDate)
+        if (stopDate && currentDate > *stopDate) {
             return false;
+        }
 
         // Check start and stop times if set.
-        if (startTime && currentTime < *startTime)
-            return false;
-
-        if (stopTime && currentTime > *stopTime)
-            return false;
+        if (startTime && stopTime) {
+            if (*startTime <= *stopTime) {
+                // Normal range (e.g., 08:00:00 to 17:00:00)
+                if (currentTime < *startTime || currentTime > *stopTime) {
+                    return false;
+                }
+            } else {
+                // Overnight range (e.g., 22:00:00 to 06:00:00)
+                if (currentTime < *startTime && currentTime > *stopTime) {
+                    return false;
+                }
+            }
+        } else if (startTime) {
+            if (currentTime < *startTime) {
+                return false;
+            }
+        } else if (stopTime) {
+            if (currentTime > *stopTime) {
+                return false;
+            }
+        }
 
         return true;
     }
