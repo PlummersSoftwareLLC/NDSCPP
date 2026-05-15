@@ -303,6 +303,10 @@ public:
                     auto reqJson = nlohmann::json::parse(req.body);
                     auto effect = reqJson.get<shared_ptr<ILEDEffect>>();
 
+                    shared_ptr<ISchedule> schedule = nullptr;
+                    if (reqJson.contains("schedule"))
+                        schedule = reqJson["schedule"].get<shared_ptr<ISchedule>>();
+
                     unique_lock writeLock(_apiMutex);
                     auto canvas = _controller.GetCanvasById(canvasId);
 
@@ -310,7 +314,7 @@ public:
                     auto& effectsManager = canvas->Effects();
 
                     // Add the new effect
-                    effectsManager.AddEffect(effect);
+                    effectsManager.AddEffect(effect, schedule);
 
                     PersistController(req);
 
