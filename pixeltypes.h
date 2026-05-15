@@ -1351,9 +1351,26 @@ inline void to_json(nlohmann::json& j, const CRGB& color)
 
 inline void from_json(const nlohmann::json& j, CRGB& color) 
 {
-    color = CRGB(
-        j.at("r").get<uint8_t>(),
-        j.at("g").get<uint8_t>(),
-        j.at("b").get<uint8_t>()
-    );
+    if (j.is_string()) {
+        string s = j.get<string>();
+        if (s.empty()) {
+            color = CRGB::Black;
+            return;
+        }
+        if (s[0] == '#') s = s.substr(1);
+        uint32_t val = static_cast<uint32_t>(stoul(s, nullptr, 16));
+        color = CRGB(val);
+    } else if (j.is_array()) {
+        color = CRGB(
+            j.at(0).get<uint8_t>(),
+            j.at(1).get<uint8_t>(),
+            j.at(2).get<uint8_t>()
+        );
+    } else {
+        color = CRGB(
+            j.value("r", j.value("red", uint8_t(0))),
+            j.value("g", j.value("green", uint8_t(0))),
+            j.value("b", j.value("blue", uint8_t(0)))
+        );
+    }
 }
