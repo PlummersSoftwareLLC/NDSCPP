@@ -9,7 +9,7 @@ using namespace std::chrono;
 #include <iostream>
 #include <vector>
 
-extern "C" 
+extern "C"
 {
     #include <libavformat/avformat.h>
     #include <libavcodec/avcodec.h>
@@ -46,7 +46,7 @@ private:
         // Open the input file
         if (avformat_open_input(&_formatCtx, _filePath.c_str(), nullptr, nullptr) != 0)
             return AfterInitError("Failed to open video file: " + _filePath);
- 
+
         // Retrieve stream information
         if (avformat_find_stream_info(_formatCtx, nullptr) < 0)
             return AfterInitError("Failed to retrieve stream info.");
@@ -93,19 +93,19 @@ private:
     {
         lock_guard lock(_ffmpegMutex);
 
-        if (_swsCtx) 
+        if (_swsCtx)
             sws_freeContext(_swsCtx);
 
-        if (_frame) 
+        if (_frame)
             av_frame_free(&_frame);
 
-        if (_packet) 
+        if (_packet)
             av_packet_free(&_packet);
 
-        if (_codecCtx) 
+        if (_codecCtx)
             avcodec_free_context(&_codecCtx);
 
-        if (_formatCtx) 
+        if (_formatCtx)
             avformat_close_input(&_formatCtx);
 
         _initialized = false;
@@ -142,9 +142,9 @@ public:
             SWS_BILINEAR, nullptr, nullptr, nullptr);
     }
 
-    void Update(ICanvas& canvas, milliseconds deltaTime) override 
+    void Update(ICanvas& canvas, milliseconds deltaTime) override
     {
-        if (!_initialized) 
+        if (!_initialized)
             return;
 
         while (av_read_frame(_formatCtx, _packet) >= 0)
@@ -160,10 +160,10 @@ public:
                         int canvasHeight = graphics.Height();
 
                         // Buffer for RGB24 pixels
-                        vector<uint8_t> rgbBuffer(canvasWidth * canvasHeight * 3);
+                        vector<uint8_t> rgbBuffer(static_cast<size_t>(canvasWidth) * canvasHeight * sizeof(CRGB));
 
                         uint8_t* dstData[1] = { rgbBuffer.data() };
-                        int dstLinesize[1] = { 3 * canvasWidth };
+                        int dstLinesize[1] = { sizeof(CRGB) * canvasWidth };
 
                         sws_scale(_swsCtx, _frame->data, _frame->linesize, 0, _codecCtx->height, dstData, dstLinesize);
 
@@ -172,7 +172,7 @@ public:
                         {
                             for (int x = 0; x < canvasWidth; ++x)
                             {
-                                int idx = (y * canvasWidth + x) * 3;
+                                int idx = (y * canvasWidth + x) * sizeof(CRGB);
                                 graphics.SetPixel(x, y, CRGB(rgbBuffer[idx], rgbBuffer[idx + 1], rgbBuffer[idx + 2]));
                             }
                         }
@@ -193,7 +193,7 @@ public:
     friend inline void from_json(const nlohmann::json& j, shared_ptr<MP4PlaybackEffect>& effect);
 };
 
-inline void to_json(nlohmann::json& j, const MP4PlaybackEffect & effect) 
+inline void to_json(nlohmann::json& j, const MP4PlaybackEffect & effect)
 {
     j = {
         {"name", effect.Name()},
