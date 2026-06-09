@@ -8,40 +8,58 @@
 
 using namespace std;
 
-inline void PersistController(IController &controller, const string &controllerFileName, const crow::request &req)
+namespace ndscpp::api
 {
-    if (req.url_params.get("nopersist") != nullptr)
-        return;
 
-    controller.WriteToFile(controllerFileName);
+struct ApiRequestContext
+{
+    IController &controller;
+    shared_mutex &apiMutex;
+    const string &controllerFileName;
+    const crow::request &req;
+
+    unique_lock<shared_mutex> Lock() const
+    {
+        return unique_lock<shared_mutex>(apiMutex);
+    }
+
+    void Persist() const
+    {
+        if (req.url_params.get("nopersist") != nullptr)
+            return;
+
+        controller.WriteToFile(controllerFileName);
+    }
+};
+
+inline void PersistController(const ApiRequestContext &context)
+{
+    context.Persist();
 }
 
 inline void ApplyCanvasesRequest(
-    IController &controller,
-    shared_mutex &apiMutex,
-    const string &controllerFileName,
-    const crow::request &req,
+    ApiRequestContext &context,
     function<void(shared_ptr<ICanvas>)> func)
 {
     nlohmann::json reqJson;
 
-    if (!req.body.empty())
-        reqJson = nlohmann::json::parse(req.body);
+    if (!context.req.body.empty())
+        reqJson = nlohmann::json::parse(context.req.body);
 
-    unique_lock writeLock(apiMutex);
+    auto writeLock = context.Lock();
 
     if (reqJson.contains("canvasIds"))
     {
         for (auto &canvasId : reqJson["canvasIds"])
-            func(controller.GetCanvasById(canvasId));
+            func(context.controller.GetCanvasById(canvasId));
     }
     else
     {
-        for (auto &canvas : controller.Canvases())
+        for (auto &canvas : context.controller.Canvases())
             func(canvas);
     }
 
-    PersistController(controller, controllerFileName, req);
+    context.Persist();
 }
 
 inline size_t NormalizeCurrentEffectIndex(const IEffectsManager &manager, size_t effectCount)
@@ -57,21 +75,18 @@ inline size_t NormalizeCurrentEffectIndex(const IEffectsManager &manager, size_t
 }
 
 inline uint32_t CreateCanvas(
-    IController &controller,
-    shared_mutex &apiMutex,
-    const string &controllerFileName,
-    const crow::request &req)
+    ApiRequestContext &context)
 {
-    auto reqJson = nlohmann::json::parse(req.body);
+    auto reqJson = nlohmann::json::parse(context.req.body);
     auto canvas = reqJson.get<shared_ptr<ICanvas>>();
 
-    unique_lock writeLock(apiMutex);
-    const uint32_t newId = controller.AddCanvas(canvas);
+    auto writeLock = context.Lock();
+    const uint32_t newId = context.controller.AddCanvas(canvas);
 
     if (newId == numeric_limits<uint32_t>::max())
         throw runtime_error("Canvas with that ID already exists.");
 
-    PersistController(controller, controllerFileName, req);
+    context.Persist();
     writeLock.unlock();
 
     for (auto &feature : canvas->Features())
@@ -85,38 +100,32 @@ inline uint32_t CreateCanvas(
 }
 
 inline shared_ptr<ICanvas> UpdateCanvasDefinition(
-    IController &controller,
-    shared_mutex &apiMutex,
-    const string &controllerFileName,
-    const crow::request &req,
+    ApiRequestContext &context,
     int canvasId)
 {
-    auto reqJson = nlohmann::json::parse(req.body);
+    auto reqJson = nlohmann::json::parse(context.req.body);
     auto updatedCanvas = reqJson.get<shared_ptr<ICanvas>>();
     updatedCanvas->SetId(static_cast<uint32_t>(canvasId));
 
-    unique_lock writeLock(apiMutex);
-    if (!controller.UpdateCanvas(updatedCanvas))
+    auto writeLock = context.Lock();
+    if (!context.controller.UpdateCanvas(updatedCanvas))
         throw out_of_range("Canvas not found: " + to_string(canvasId));
 
-    PersistController(controller, controllerFileName, req);
+    context.Persist();
     return updatedCanvas;
 }
 
 inline uint32_t CreateFeature(
-    IController &controller,
-    shared_mutex &apiMutex,
-    const string &controllerFileName,
-    const crow::request &req,
+    ApiRequestContext &context,
     int canvasId)
 {
-    auto reqJson = nlohmann::json::parse(req.body);
+    auto reqJson = nlohmann::json::parse(context.req.body);
     auto feature = reqJson.get<shared_ptr<ILEDFeature>>();
 
-    unique_lock writeLock(apiMutex);
-    auto canvas = controller.GetCanvasById(canvasId);
+    auto writeLock = context.Lock();
+    auto canvas = context.controller.GetCanvasById(canvasId);
     const auto newId = canvas->AddFeature(feature);
-    PersistController(controller, controllerFileName, req);
+    context.Persist();
     writeLock.unlock();
 
     feature->Socket()->Start();
@@ -124,51 +133,42 @@ inline uint32_t CreateFeature(
 }
 
 inline void DeleteFeature(
-    IController &controller,
-    shared_mutex &apiMutex,
-    const string &controllerFileName,
-    const crow::request &req,
+    ApiRequestContext &context,
     int canvasId,
     int featureId)
 {
-    unique_lock writeLock(apiMutex);
-    auto canvas = controller.GetCanvasById(canvasId);
+    auto writeLock = context.Lock();
+    auto canvas = context.controller.GetCanvasById(canvasId);
     if (!canvas->RemoveFeatureById(featureId))
         throw out_of_range("Feature not found: " + to_string(featureId));
 
-    PersistController(controller, controllerFileName, req);
+    context.Persist();
 }
 
 inline void DeleteCanvas(
-    IController &controller,
-    shared_mutex &apiMutex,
-    const string &controllerFileName,
-    const crow::request &req,
+    ApiRequestContext &context,
     int canvasId)
 {
-    unique_lock writeLock(apiMutex);
-    controller.DeleteCanvasById(canvasId);
-    PersistController(controller, controllerFileName, req);
+    auto writeLock = context.Lock();
+    context.controller.DeleteCanvasById(canvasId);
+    context.Persist();
 }
 
 inline size_t AddEffect(
-    IController &controller,
-    shared_mutex &apiMutex,
-    const string &controllerFileName,
-    const crow::request &req,
+    ApiRequestContext &context,
     int canvasId)
 {
-    auto reqJson = nlohmann::json::parse(req.body);
+    auto reqJson = nlohmann::json::parse(context.req.body);
     auto effect = reqJson.get<shared_ptr<ILEDEffect>>();
 
-    unique_lock writeLock(apiMutex);
-    auto canvas = controller.GetCanvasById(canvasId);
+    auto writeLock = context.Lock();
+    auto canvas = context.controller.GetCanvasById(canvasId);
     auto &manager = canvas->Effects();
     const bool wantsToRun = manager.WantsToRun();
     manager.Stop();
     manager.AddEffect(effect);
     const auto effectIndex = manager.EffectCount() - 1;
-    PersistController(controller, controllerFileName, req);
+    context.Persist();
     writeLock.unlock();
 
     if (wantsToRun && manager.EffectCount() > 0)
@@ -178,18 +178,15 @@ inline size_t AddEffect(
 }
 
 inline shared_ptr<ILEDEffect> UpdateEffect(
-    IController &controller,
-    shared_mutex &apiMutex,
-    const string &controllerFileName,
-    const crow::request &req,
+    ApiRequestContext &context,
     int canvasId,
     int effectIndex)
 {
-    auto reqJson = nlohmann::json::parse(req.body);
+    auto reqJson = nlohmann::json::parse(context.req.body);
     auto effect = reqJson.get<shared_ptr<ILEDEffect>>();
 
-    unique_lock writeLock(apiMutex);
-    auto canvas = controller.GetCanvasById(canvasId);
+    auto writeLock = context.Lock();
+    auto canvas = context.controller.GetCanvasById(canvasId);
     auto &manager = canvas->Effects();
     auto effects = manager.Effects();
 
@@ -200,7 +197,7 @@ inline shared_ptr<ILEDEffect> UpdateEffect(
     manager.Stop();
     effects[effectIndex] = effect;
     manager.SetEffects(std::move(effects));
-    PersistController(controller, controllerFileName, req);
+    context.Persist();
     writeLock.unlock();
 
     if (wantsToRun && manager.EffectCount() > 0)
@@ -210,15 +207,12 @@ inline shared_ptr<ILEDEffect> UpdateEffect(
 }
 
 inline void DeleteEffect(
-    IController &controller,
-    shared_mutex &apiMutex,
-    const string &controllerFileName,
-    const crow::request &req,
+    ApiRequestContext &context,
     int canvasId,
     int effectIndex)
 {
-    unique_lock writeLock(apiMutex);
-    auto canvas = controller.GetCanvasById(canvasId);
+    auto writeLock = context.Lock();
+    auto canvas = context.controller.GetCanvasById(canvasId);
     auto &manager = canvas->Effects();
     auto effects = manager.Effects();
 
@@ -233,7 +227,7 @@ inline void DeleteEffect(
     manager.SetEffects(std::move(effects));
     manager.SetCurrentEffectIndex(nextIndex == numeric_limits<size_t>::max() ? -1 : static_cast<int>(nextIndex));
 
-    PersistController(controller, controllerFileName, req);
+    context.Persist();
     writeLock.unlock();
 
     if (wantsToRun && manager.EffectCount() > 0)
@@ -353,3 +347,5 @@ inline nlohmann::json BuildEffectCatalog()
         })}
     };
 }
+
+} // namespace ndscpp::api

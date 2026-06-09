@@ -5,11 +5,14 @@
 #include <ranges>
 #include <shared_mutex>
 #include <future>
+#include <functional>
+#include <utility>
 #include "json.hpp"
 #include "crow_all.h"
 #include "apihelpers.h"
 
 using namespace std;
+namespace api = ndscpp::api;
 
 class WebServer
 {
@@ -41,14 +44,19 @@ class WebServer
     IController & _controller; // Reference to all canvases
     crow::App<HeaderMiddleware> _crowApp;
 
-    void PersistController(const crow::request& req)
+    api::ApiRequestContext MakeRequestContext(const crow::request &req)
     {
-        ::PersistController(_controller, _controllerFileName, req);
+        return api::ApiRequestContext{_controller, _apiMutex, _controllerFileName, req};
     }
 
-    void ApplyCanvasesRequest(const crow::request& req, function<void(shared_ptr<ICanvas>)> func)
+    template <typename Func, typename... Args>
+    decltype(auto) WithContext(const crow::request &req, Func &&func, Args &&...args)
     {
-        ::ApplyCanvasesRequest(_controller, _apiMutex, _controllerFileName, req, std::move(func));
+        auto context = MakeRequestContext(req);
+        return std::invoke(
+            std::forward<Func>(func),
+            context,
+            std::forward<Args>(args)...);
     }
 
 public:
@@ -210,7 +218,7 @@ public:
             {
                 try
                 {
-                    return BuildEffectCatalog().dump();
+                    return api::BuildEffectCatalog().dump();
                 }
                 catch (const exception &e)
                 {
@@ -224,7 +232,13 @@ public:
             {
                 try
                 {
-                    ApplyCanvasesRequest(req, [](shared_ptr<ICanvas> canvas) { canvas->Effects().Start(*canvas); });
+                    WithContext(req, [](api::ApiRequestContext &context)
+                    {
+                        api::ApplyCanvasesRequest(context, [](shared_ptr<ICanvas> canvas)
+                        {
+                            canvas->Effects().Start(*canvas);
+                        });
+                    });
                     return crow::response(crow::OK);
                 }
                 catch(const exception& e)
@@ -239,7 +253,13 @@ public:
             {
                 try
                 {
-                    ApplyCanvasesRequest(req, [](shared_ptr<ICanvas> canvas) { canvas->Effects().Stop(); });
+                    WithContext(req, [](api::ApiRequestContext &context)
+                    {
+                        api::ApplyCanvasesRequest(context, [](shared_ptr<ICanvas> canvas)
+                        {
+                            canvas->Effects().Stop();
+                        });
+                    });
                     return crow::response(crow::OK);
                 }
                 catch(const exception& e)
@@ -261,7 +281,10 @@ public:
                     unique_lock writeLock(_apiMutex);
                     auto canvas = _controller.GetCanvasById(static_cast<uint16_t>(canvasId));
                     canvas->Effects().SetCurrentEffect(static_cast<size_t>(effectIndex), *canvas);
-                    PersistController(req);
+                    WithContext(req, [](api::ApiRequestContext &context)
+                    {
+                        api::PersistController(context);
+                    });
                     return crow::response(crow::OK);
                 }
                 catch (const out_of_range& e)
@@ -282,7 +305,7 @@ public:
             {
                 try
                 {
-                    const auto newID = CreateCanvas(_controller, _apiMutex, _controllerFileName, req);
+                    const auto newID = WithContext(req, api::CreateCanvas);
                     return crow::response(201, nlohmann::json{{"id", newID}}.dump());
                 }
                 catch (const exception& e)
@@ -298,7 +321,7 @@ public:
                 {
                     try
                     {
-                        const auto newId = CreateFeature(_controller, _apiMutex, _controllerFileName, req, canvasId);
+                        const auto newId = WithContext(req, api::CreateFeature, canvasId);
                         return nlohmann::json{{"id", newId}}.dump();
 
                     }
@@ -316,7 +339,7 @@ public:
                 {
                     try
                     {
-                        DeleteFeature(_controller, _apiMutex, _controllerFileName, req, canvasId, featureId);
+                        WithContext(req, api::DeleteFeature, canvasId, featureId);
                         return crow::response(crow::OK);
                     }
                     catch(const exception& e)
@@ -333,7 +356,7 @@ public:
                 {
                     try
                     {
-                        DeleteCanvas(_controller, _apiMutex, _controllerFileName, req, id);
+                        WithContext(req, api::DeleteCanvas, id);
                         return crow::response(crow::OK);
                     }
                     catch(const exception& e)
@@ -348,7 +371,7 @@ public:
             {
                 try
                 {
-                    auto canvas = UpdateCanvasDefinition(_controller, _apiMutex, _controllerFileName, req, id);
+                    auto canvas = WithContext(req, api::UpdateCanvasDefinition, id);
                     return crow::response(crow::OK, nlohmann::json(*canvas).dump());
                 }
                 catch (const out_of_range &e)
@@ -369,7 +392,7 @@ public:
             {
                 try
                 {
-                    const auto effectIndex = AddEffect(_controller, _apiMutex, _controllerFileName, req, canvasId);
+                    const auto effectIndex = WithContext(req, api::AddEffect, canvasId);
                     return crow::response(crow::OK, nlohmann::json{{"index", effectIndex}}.dump());
                 }
                 catch (const exception& e)
@@ -384,7 +407,7 @@ public:
             {
                 try
                 {
-                    auto effect = UpdateEffect(_controller, _apiMutex, _controllerFileName, req, canvasId, effectIndex);
+                    auto effect = WithContext(req, api::UpdateEffect, canvasId, effectIndex);
                     return crow::response(crow::OK, nlohmann::json(*effect).dump());
                 }
                 catch (const out_of_range &e)
@@ -404,7 +427,7 @@ public:
             {
                 try
                 {
-                    DeleteEffect(_controller, _apiMutex, _controllerFileName, req, canvasId, effectIndex);
+                    WithContext(req, api::DeleteEffect, canvasId, effectIndex);
                     return crow::response(crow::OK);
                 }
                 catch (const out_of_range &e)
