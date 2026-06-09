@@ -421,9 +421,6 @@ class Controller : public IController
     {
         logger->debug("Adding canvas {}...", ptrCanvas->Name());
 
-        // This is a bit odd; we try get the current canvas with the ID specified by the new one,
-        // and we only proceed in the exception case if the canvas doesn't exist, where we add it
-
         lock_guard lock(_canvasMutex);
         try
         {
@@ -433,10 +430,9 @@ class Controller : public IController
         }
         catch(const out_of_range &)               
         {
-            auto newId = Canvas::NextId();
-            ptrCanvas->SetId(newId);
-            _canvases.push_back(ptrCanvas);    
-            return newId;
+            _canvases.push_back(ptrCanvas);
+            Canvas::EnsureNextIdBeyond(ptrCanvas->Id());
+            return ptrCanvas->Id();
         }
     }
 

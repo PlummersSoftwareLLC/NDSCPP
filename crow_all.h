@@ -2142,7 +2142,7 @@ namespace crow
          * @param last1 end() iterator of the first range
          * @param first2 begin() iterator of the second range
          * @param last2 end() iterator of the second range
-         * @return first occurence that matches between two ranges of iterators 
+         * @return first occurence that matches between two ranges of iterators
         */
         template<typename Iter1, typename Iter2>
         inline static Iter1 find_first_of(Iter1 first1, Iter1 last1, Iter2 first2, Iter2 last2)
@@ -7456,7 +7456,7 @@ namespace crow // NOTE: Already documented in "crow/app.h"
             inline void dump_indentation_part(std::string& out, const int indent, const char separator, const int indent_level) const
             {
                 out.push_back('\n');
-                out.append(indent_level * indent, separator);
+                out.append(static_cast<size_t>(indent_level) * indent, separator);
             }
 
 
@@ -9318,7 +9318,7 @@ namespace crow
     {
 
         /// A class for scheduling functions to be called after a specific
-        /// amount of ticks. Ther tick length can  be handed over in constructor, 
+        /// amount of ticks. Ther tick length can  be handed over in constructor,
         /// the default tick length is equal to 1 second.
         class task_timer
         {
@@ -9344,7 +9344,7 @@ namespace crow
 
             ~task_timer() { timer_.cancel(); }
 
-            /// Cancel the scheduling of the given task 
+            /// Cancel the scheduling of the given task
             ///
             /// \param identifier_type task identifier of the task to cancel.
             void cancel(identifier_type id)
@@ -9390,8 +9390,8 @@ namespace crow
 
             ///
             /// \param timeout The amount of ticks to wait before
-            /// execution. 
-            /// For tick length \see tick_length_ms_ 
+            /// execution.
+            /// For tick length \see tick_length_ms_
             void set_default_timeout(uint8_t timeout) {
                 default_timeout_ = timeout;
             }
@@ -10357,7 +10357,7 @@ namespace crow // NOTE: Already documented in "crow/app.h"
                 max_payload_bytes_ = payload;
             }
 
-            /// Returns the matching client/server subprotocol, empty string if none matched. 
+            /// Returns the matching client/server subprotocol, empty string if none matched.
             std::string get_subprotocol() const override
             {
                 return subprotocol_;
@@ -11111,7 +11111,7 @@ namespace crow // NOTE: Already documented in "crow/app.h"
         std::cv_status wait_for_start(std::chrono::steady_clock::time_point wait_until)
         {
             std::unique_lock<std::mutex> lock(start_mutex_);
-            
+
             std::cv_status status = std::cv_status::no_timeout;
             while (!server_started_ && ( status==std::cv_status::no_timeout ))
                 status = cv_started_.wait_until(lock,wait_until);
@@ -14836,7 +14836,7 @@ namespace crow
                     status = cv_started_.wait_until(lock, wait_until);
                 }
             }
-            
+
             if (status == std::cv_status::no_timeout)
             {
                 if (server_)

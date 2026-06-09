@@ -1,4 +1,4 @@
-const STORAGE_KEY = "ndscpp.navigator.settings.v1";
+const STORAGE_KEY = "ndscpp.navigator.settings.v2";
 const DEFAULT_REFRESH_MS = 2000;
 const DEFAULT_PORT = 49152;
 const QUEUE_VISUAL_MAX = 25;
@@ -100,6 +100,9 @@ function bindElements() {
   document.body.appendChild(elements.loadDropdownMenu);
   elements.saveConfigButton = document.getElementById("saveConfigButton");
   elements.configFileInput = document.getElementById("configFileInput");
+  elements.settingsToggle = document.getElementById("settingsToggle");
+  elements.settingsDropdownMenu = document.getElementById("settingsDropdownMenu");
+  document.body.appendChild(elements.settingsDropdownMenu);
 
   elements.collisionDialog = document.getElementById("collisionDialog");
   elements.collisionDialogTitle = document.getElementById("collisionDialogTitle");
@@ -229,9 +232,12 @@ function bindEvents() {
   elements.loadDropdownMenu.addEventListener("click", (e) => { e.stopPropagation(); handleLoadDropdownClick(e); });
   elements.saveConfigButton.addEventListener("click", handleSaveConfig);
   elements.configFileInput.addEventListener("change", handleConfigFileSelected);
+  elements.settingsToggle.addEventListener("click", (e) => { e.stopPropagation(); toggleSettingsDropdown(); });
+  elements.settingsDropdownMenu.addEventListener("click", (e) => { e.stopPropagation(); handleSettingsClick(e); });
   document.addEventListener("click", () => {
     elements.loadDropdownMenu.classList.remove('open');
     elements.refreshDropdownMenu.classList.remove('open');
+    elements.settingsDropdownMenu.classList.remove('open');
   });
 
   document.addEventListener("keydown", (e) => {
@@ -269,6 +275,7 @@ function bindEvents() {
   });
 
   elements.canvasTableBody.addEventListener("click", handleActionClick);
+  elements.canvasTableBody.addEventListener("dblclick", handleTableDblClick);
   elements.canvasTableBody.addEventListener("change", handleTableChange);
   elements.canvasTableBody.addEventListener("mousedown", () => { state.tableInteracting = true; });
   document.addEventListener("mouseup", () => { state.tableInteracting = false; });
@@ -495,6 +502,7 @@ function toggleLoadDropdown() {
   const menu = elements.loadDropdownMenu;
   const wasHidden = !menu.classList.contains('open');
   elements.refreshDropdownMenu.classList.remove('open');
+  elements.settingsDropdownMenu.classList.remove('open');
   if (wasHidden) {
     positionMenuAtButton(menu, elements.loadDropdownToggle);
   } else {
@@ -506,6 +514,7 @@ function toggleRefreshDropdown() {
   const menu = elements.refreshDropdownMenu;
   const wasHidden = !menu.classList.contains('open');
   elements.loadDropdownMenu.classList.remove('open');
+  elements.settingsDropdownMenu.classList.remove('open');
   if (wasHidden) {
     positionMenuAtButton(menu, elements.refreshDropdownToggle);
   } else {
@@ -549,6 +558,46 @@ function normalizeImportedControllerConfig(json) {
   }
 
   throw new Error("Configuration must be a controller object or an array of canvases.");
+}
+
+function toggleSettingsDropdown() {
+  const menu = elements.settingsDropdownMenu;
+  const wasHidden = !menu.classList.contains('open');
+  elements.loadDropdownMenu.classList.remove('open');
+  elements.refreshDropdownMenu.classList.remove('open');
+  if (wasHidden) {
+    positionMenuAtButton(menu, elements.settingsToggle);
+  } else {
+    menu.classList.remove('open');
+  }
+}
+
+function handleSettingsClick(event) {
+  const item = event.target.closest('[data-settings-action]');
+  if (!item) return;
+  elements.settingsDropdownMenu.classList.remove('open');
+  const action = item.dataset.settingsAction;
+  if (action === 'reset-page') {
+    resetPageDefaults();
+  }
+}
+
+function resetPageDefaults() {
+  localStorage.removeItem(STORAGE_KEY);
+  state.filter = "";
+  state.sortKey = "name";
+  state.sortDirection = "asc";
+  state.refreshMs = DEFAULT_REFRESH_MS;
+  state.autoRefresh = true;
+  state.dirty = false;
+  state.expandedCanvasIds = new Set();
+  state.sectionExpansions = {};
+  state.selectedCanvases = new Set();
+  state.selectedFeatures = {};
+  state.selectedEffects = {};
+  syncControls();
+  restartRefreshTimer();
+  render();
 }
 
 async function handleConfigFileSelected(event) {
@@ -708,8 +757,21 @@ async function handleSaveConfig() {
   }
 }
 
+function resolveApiUrl(url) {
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  if (!url.startsWith("/api/")) {
+    return url;
+  }
+
+  const apiPort = Number(window.NDSCPP_API_PORT || 7777);
+  return `${window.location.protocol}//${window.location.hostname}:${apiPort}${url}`;
+}
+
 async function fetchJson(url, options) {
-  const response = await fetch(url, options);
+  const response = await fetch(resolveApiUrl(url), { cache: "no-store", ...options });
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || `Request failed: ${response.status}`);
@@ -892,7 +954,7 @@ async function runPreviewLoop(canvasId, loop) {
   while (loop.running) {
     let delayMs = 33; // default ~30fps
     try {
-      const resp = await fetch(`/api/canvases/${canvasId}/pixels`);
+      const resp = await fetch(resolveApiUrl(`/api/canvases/${canvasId}/pixels`));
       if (!resp.ok) throw new Error(resp.statusText);
       const buf = await resp.arrayBuffer();
       const view = new DataView(buf);
@@ -995,7 +1057,13 @@ function renderCanvasRows(canvas) {
         <td colspan="9" class="detail-cell">
           <div class="detail-shell">
             <div class="detail-stack">
-              <section class="nested-card card-yellow">
+              <section class="nested-card card-red${sections.preview ? '' : ' collapsed'}">
+                ${renderPreviewSectionHeader(canvasId, sections.preview)}
+                ${sections.preview ? `
+                  <div class="preview-container" data-preview-for="${canvasId}"></div>
+                ` : ""}
+              </section>
+              <section class="nested-card card-yellow${sections.features ? '' : ' collapsed'}">
                 ${renderSectionHeaderRow({
                   canvasId,
                   section: "features",
@@ -1016,7 +1084,7 @@ function renderCanvasRows(canvas) {
                   ${renderFolderTab(canvasId, "feature", features.length)}
                 ` : ""}
               </section>
-              <section class="nested-card card-cyan">
+              <section class="nested-card card-cyan${sections.effects ? '' : ' collapsed'}">
                 ${renderSectionHeaderRow({
                   canvasId,
                   section: "effects",
@@ -1035,12 +1103,6 @@ function renderCanvasRows(canvas) {
                     </table>
                   </div>
                   ${renderFolderTab(canvasId, "effect", effects.length)}
-                ` : ""}
-              </section>
-              <section class="nested-card card-red${sections.preview ? '' : ' collapsed'}">
-                ${renderPreviewSectionHeader(canvasId, sections.preview)}
-                ${sections.preview ? `
-                  <div class="preview-container" data-preview-for="${canvasId}"></div>
                 ` : ""}
               </section>
             </div>
@@ -1180,12 +1242,12 @@ function renderCanvasFolderTab() {
     <div class="folder-tab folder-tab-green">
       <a href="#" class="folder-tab-action" data-action="add-canvas">&#x2795; New</a>
       <span class="folder-tab-sep">&#x2502;</span>
-      <a href="#" class="folder-tab-action ${canEdit ? "" : "disabled"}" 
+      <a href="#" class="folder-tab-action ${canEdit ? "" : "disabled"}"
          ${canEdit ? `data-action="edit-canvas" data-canvas-id="${selectedId}"` : ""}>
         &#x270E; Edit
       </a>
       <span class="folder-tab-sep">&#x2502;</span>
-      <a href="#" class="folder-tab-action ${canDelete ? "" : "disabled"}" 
+      <a href="#" class="folder-tab-action ${canDelete ? "" : "disabled"}"
          ${canDelete ? `data-action="delete-selected-canvases"` : ""}>
         &#x1F5D1; Delete${selectedCount > 1 ? ` (${selectedCount})` : ""}
       </a>
@@ -1195,7 +1257,7 @@ function renderCanvasFolderTab() {
 
 function renderFolderTab(canvasId, type, itemCount) {
   const isFeature = type === "feature";
-  const selectedSet = isFeature 
+  const selectedSet = isFeature
     ? (state.selectedFeatures[canvasId] || new Set())
     : (state.selectedEffects[canvasId] || new Set());
   const selectedCount = selectedSet.size;
@@ -1214,12 +1276,12 @@ function renderFolderTab(canvasId, type, itemCount) {
     <div class="folder-tab folder-tab-${colorClass}">
       <a href="#" class="folder-tab-action" data-action="add-${type}" data-canvas-id="${canvasId}">&#x2795; New</a>
       <span class="folder-tab-sep">&#x2502;</span>
-      <a href="#" class="folder-tab-action ${canEdit ? "" : "disabled"}" 
+      <a href="#" class="folder-tab-action ${canEdit ? "" : "disabled"}"
          ${canEdit ? `data-action="edit-${type}" data-canvas-id="${canvasId}" data-${isFeature ? "feature-id" : "effect-index"}="${selectedId}"` : ""}>
         &#x270E; Edit
       </a>
       <span class="folder-tab-sep">&#x2502;</span>
-      <a href="#" class="folder-tab-action ${canDelete ? "" : "disabled"}" 
+      <a href="#" class="folder-tab-action ${canDelete ? "" : "disabled"}"
          ${canDelete ? `data-action="delete-selected-${type}s" data-canvas-id="${canvasId}"` : ""}>
         &#x1F5D1; Delete${selectedCount > 1 ? ` (${selectedCount})` : ""}
       </a>
@@ -1298,8 +1360,8 @@ function handleActionClick(event) {
   }
 
   const action = trigger.dataset.action;
-  const canvasId = Number(trigger.dataset.canvasId || 0) || null;
-  const featureId = Number(trigger.dataset.featureId || 0) || null;
+  const canvasId = trigger.dataset.canvasId !== undefined ? Number(trigger.dataset.canvasId) : null;
+  const featureId = trigger.dataset.featureId !== undefined ? Number(trigger.dataset.featureId) : null;
   const effectIndex = trigger.dataset.effectIndex !== undefined ? Number(trigger.dataset.effectIndex) : null;
 
   switch (action) {
@@ -1404,26 +1466,36 @@ function handleActionClick(event) {
   }
 }
 
+function handleTableDblClick(event) {
+  const row = event.target.closest("tr.selectable-row[data-effect-index]");
+  if (!row) return;
+  const canvasId = row.dataset.canvasId !== undefined ? Number(row.dataset.canvasId) : null;
+  const effectIndex = row.dataset.effectIndex !== undefined ? Number(row.dataset.effectIndex) : null;
+  if (canvasId !== null && effectIndex !== null) {
+    setCurrentEffect(canvasId, effectIndex);
+  }
+}
+
 async function handleTableChange(event) {
   const target = event.target;
-  
+
   // Handle checkbox selection changes
   if (target instanceof HTMLInputElement && target.type === "checkbox" && target.classList.contains("row-checkbox")) {
     const action = target.dataset.action;
-    const canvasId = Number(target.dataset.canvasId || 0);
-    
+    const canvasId = target.dataset.canvasId !== undefined ? Number(target.dataset.canvasId) : null;
+
     if (action === "toggle-canvas-select") {
-      if (canvasId) {
+      if (canvasId !== null) {
         toggleCanvasSelection(canvasId);
       }
     } else if (action === "toggle-feature-select") {
-      const featureId = Number(target.dataset.featureId || 0);
-      if (canvasId && featureId !== null) {
+      const featureId = target.dataset.featureId !== undefined ? Number(target.dataset.featureId) : null;
+      if (canvasId !== null && featureId !== null) {
         toggleFeatureSelection(canvasId, featureId);
       }
     } else if (action === "toggle-effect-select") {
-      const effectIndex = Number(target.dataset.effectIndex);
-      if (canvasId && effectIndex !== null) {
+      const effectIndex = target.dataset.effectIndex !== undefined ? Number(target.dataset.effectIndex) : null;
+      if (canvasId !== null && effectIndex !== null) {
         toggleEffectSelection(canvasId, effectIndex);
       }
     }
@@ -1438,8 +1510,8 @@ async function handleTableChange(event) {
     return;
   }
 
-  const canvasId = Number(target.dataset.canvasId || 0);
-  if (!canvasId) {
+  const canvasId = target.dataset.canvasId !== undefined ? Number(target.dataset.canvasId) : null;
+  if (canvasId === null) {
     return;
   }
 
@@ -1542,14 +1614,14 @@ async function setCurrentEffect(canvasId, effectIndex) {
 async function deleteSelectedFeatures(canvasId) {
   const selected = state.selectedFeatures[canvasId];
   if (!selected || selected.size === 0) return;
-  
+
   const featureIds = Array.from(selected);
   const count = featureIds.length;
-  
+
   if (!confirm(`Delete ${count} selected feature${count > 1 ? "s" : ""}?`)) {
     return;
   }
-  
+
   try {
     for (const featureId of featureIds) {
       await deleteFeatureById(canvasId, featureId, null, true);
@@ -1565,15 +1637,15 @@ async function deleteSelectedFeatures(canvasId) {
 async function deleteSelectedEffects(canvasId) {
   const selected = state.selectedEffects[canvasId];
   if (!selected || selected.size === 0) return;
-  
+
   // Sort descending so we delete from end first (to preserve indices)
   const indices = Array.from(selected).sort((a, b) => b - a);
   const count = indices.length;
-  
+
   if (!confirm(`Delete ${count} selected effect${count > 1 ? "s" : ""}?`)) {
     return;
   }
-  
+
   try {
     for (const effectIndex of indices) {
       await deleteEffectByIndex(canvasId, effectIndex, null, true);
@@ -1603,7 +1675,7 @@ function pruneExpandedSet() {
       delete state.sectionExpansions[canvasId];
     }
   });
-  
+
   // Prune stale feature selections
   Object.keys(state.selectedFeatures).forEach((canvasId) => {
     const numCanvasId = Number(canvasId);
@@ -1619,7 +1691,7 @@ function pruneExpandedSet() {
       });
     }
   });
-  
+
   // Prune stale effect selections
   Object.keys(state.selectedEffects).forEach((canvasId) => {
     const numCanvasId = Number(canvasId);
@@ -1651,9 +1723,9 @@ function ensureSectionExpansion(canvasId) {
   const key = String(canvasId);
   if (!state.sectionExpansions[key]) {
     state.sectionExpansions[key] = {
-      features: true,
-      effects: true,
-      preview: false,
+      features: false,
+      effects: false,
+      preview: true,
     };
   }
   return state.sectionExpansions[key];

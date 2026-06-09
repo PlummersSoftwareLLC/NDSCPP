@@ -258,6 +258,7 @@ class SocketChannel : public ISocketChannel
     SpeedTracker _speedTracker;
 
     uint32_t _reconnectCount;
+    system_clock::time_point _lastInvalidByteWarning;
 
     queue<vector<uint8_t>> _frameQueue;
     size_t _totalQueuedBytes;  // Track total memory usage
@@ -276,7 +277,8 @@ public:
           _lastClientResponse(),
           _lastConnectionAttempt(system_clock::now()),
           _reconnectCount(0),
-          _totalQueuedBytes(0)
+          _totalQueuedBytes(0),
+          _lastInvalidByteWarning(system_clock::now() - 60s)
     {
     }
 
@@ -543,7 +545,12 @@ private:
                     }
                 }
 
-                logger->warn("Invalid byte count reading response from {} [{}]", _hostName, _friendlyName);
+                auto now = system_clock::now();
+                if (duration_cast<seconds>(now - _lastInvalidByteWarning).count() >= 30)
+                {
+                    logger->warn("Invalid byte count ({}) reading response from {} [{}]", byteCount, _hostName, _friendlyName);
+                    _lastInvalidByteWarning = now;
+                }
                 // Invalid byte count; eat the contents
                 vector<uint8_t> tempBuffer(byteCount);
                 recv(_socketFd, tempBuffer.data(), byteCount, 0);
