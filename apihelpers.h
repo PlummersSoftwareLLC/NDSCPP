@@ -39,6 +39,45 @@ inline void PersistController(const ApiRequestContext &context)
     context.Persist();
 }
 
+inline void ResetController(ApiRequestContext &context)
+{
+    auto writeLock = context.Lock();
+    context.controller.ClearAllCanvases();
+    context.Persist();
+}
+
+inline void ReplaceController(ApiRequestContext &context)
+{
+    auto reqJson = nlohmann::json::parse(context.req.body);
+    const auto &canvasesJson = reqJson.is_array()
+        ? reqJson
+        : reqJson.value("canvases", nlohmann::json::array());
+
+    auto writeLock = context.Lock();
+    context.controller.ClearAllCanvases();
+
+    for (const auto &canvasJson : canvasesJson)
+        context.controller.AddCanvas(canvasJson.get<shared_ptr<ICanvas>>());
+
+    context.controller.Connect();
+    context.controller.Start(true);
+    context.Persist();
+}
+
+inline void SetCurrentEffect(ApiRequestContext &context, int canvasId)
+{
+    auto reqJson = nlohmann::json::parse(context.req.body);
+    const int effectIndex = reqJson.at("effectIndex").get<int>();
+
+    auto writeLock = context.Lock();
+    auto canvas = context.controller.GetCanvasById(static_cast<uint16_t>(canvasId));
+    canvas->Effects().SetCurrentEffect(static_cast<size_t>(effectIndex), *canvas);
+    context.Persist();
+}
+
+namespace
+{
+
 template <typename T>
 inline T ParseBodyAs(const ApiRequestContext &context)
 {
@@ -46,7 +85,7 @@ inline T ParseBodyAs(const ApiRequestContext &context)
 }
 
 template <typename MutateFunc>
-inline void MutateEffects(ApiRequestContext &context, int canvasId, MutateFunc mutate)
+inline void MutateEffect(ApiRequestContext &context, int canvasId, MutateFunc mutate)
 {
     auto writeLock = context.Lock();
     auto canvas = context.controller.GetCanvasById(canvasId);
@@ -98,6 +137,24 @@ inline size_t NormalizeCurrentEffectIndex(const IEffectsManager &manager, size_t
         return effectCount - 1;
 
     return rawIndex;
+}
+
+} // namespace
+
+inline void StartCanvas(ApiRequestContext &context)
+{
+    ApplyCanvasesRequest(context, [](shared_ptr<ICanvas> canvas)
+    {
+        canvas->Effects().Start(*canvas);
+    });
+}
+
+inline void StopCanvas(ApiRequestContext &context)
+{
+    ApplyCanvasesRequest(context, [](shared_ptr<ICanvas> canvas)
+    {
+        canvas->Effects().Stop();
+    });
 }
 
 inline uint32_t CreateCanvas(
@@ -184,7 +241,7 @@ inline size_t AddEffect(
     auto effect = ParseBodyAs<shared_ptr<ILEDEffect>>(context);
     size_t effectIndex = numeric_limits<size_t>::max();
 
-    MutateEffects(context, canvasId, [&](IEffectsManager &manager)
+    MutateEffect(context, canvasId, [&](IEffectsManager &manager)
     {
         manager.AddEffect(effect);
         effectIndex = manager.EffectCount() - 1;
@@ -200,7 +257,7 @@ inline shared_ptr<ILEDEffect> UpdateEffect(
 {
     auto effect = ParseBodyAs<shared_ptr<ILEDEffect>>(context);
 
-    MutateEffects(context, canvasId, [&](IEffectsManager &manager)
+    MutateEffect(context, canvasId, [&](IEffectsManager &manager)
     {
         auto effects = manager.Effects();
         if (effectIndex < 0 || static_cast<size_t>(effectIndex) >= effects.size())
@@ -218,7 +275,7 @@ inline void DeleteEffect(
     int canvasId,
     int effectIndex)
 {
-    MutateEffects(context, canvasId, [&](IEffectsManager &manager)
+    MutateEffect(context, canvasId, [&](IEffectsManager &manager)
     {
         auto effects = manager.Effects();
         if (effectIndex < 0 || static_cast<size_t>(effectIndex) >= effects.size())
