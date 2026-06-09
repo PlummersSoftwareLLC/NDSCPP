@@ -1,7 +1,9 @@
 #pragma once
 
+#include <functional>
 #include <limits>
 #include <shared_mutex>
+#include <utility>
 
 #include "controller.h"
 #include "crow_all.h"
@@ -35,6 +37,30 @@ struct ApiRequestContext
 inline void PersistController(const ApiRequestContext &context)
 {
     context.Persist();
+}
+
+template <typename T>
+inline T ParseBodyAs(const ApiRequestContext &context)
+{
+    return nlohmann::json::parse(context.req.body).get<T>();
+}
+
+template <typename MutateFunc>
+inline void MutateEffects(ApiRequestContext &context, int canvasId, MutateFunc mutate)
+{
+    auto writeLock = context.Lock();
+    auto canvas = context.controller.GetCanvasById(canvasId);
+    auto &manager = canvas->Effects();
+    const bool wantsToRun = manager.WantsToRun();
+
+    manager.Stop();
+    mutate(manager);
+
+    context.Persist();
+    writeLock.unlock();
+
+    if (wantsToRun && manager.EffectCount() > 0)
+        manager.Start(*canvas);
 }
 
 inline void ApplyCanvasesRequest(
@@ -77,8 +103,7 @@ inline size_t NormalizeCurrentEffectIndex(const IEffectsManager &manager, size_t
 inline uint32_t CreateCanvas(
     ApiRequestContext &context)
 {
-    auto reqJson = nlohmann::json::parse(context.req.body);
-    auto canvas = reqJson.get<shared_ptr<ICanvas>>();
+    auto canvas = ParseBodyAs<shared_ptr<ICanvas>>(context);
 
     auto writeLock = context.Lock();
     const uint32_t newId = context.controller.AddCanvas(canvas);
@@ -103,8 +128,7 @@ inline shared_ptr<ICanvas> UpdateCanvasDefinition(
     ApiRequestContext &context,
     int canvasId)
 {
-    auto reqJson = nlohmann::json::parse(context.req.body);
-    auto updatedCanvas = reqJson.get<shared_ptr<ICanvas>>();
+    auto updatedCanvas = ParseBodyAs<shared_ptr<ICanvas>>(context);
     updatedCanvas->SetId(static_cast<uint32_t>(canvasId));
 
     auto writeLock = context.Lock();
@@ -119,8 +143,7 @@ inline uint32_t CreateFeature(
     ApiRequestContext &context,
     int canvasId)
 {
-    auto reqJson = nlohmann::json::parse(context.req.body);
-    auto feature = reqJson.get<shared_ptr<ILEDFeature>>();
+    auto feature = ParseBodyAs<shared_ptr<ILEDFeature>>(context);
 
     auto writeLock = context.Lock();
     auto canvas = context.controller.GetCanvasById(canvasId);
@@ -158,21 +181,14 @@ inline size_t AddEffect(
     ApiRequestContext &context,
     int canvasId)
 {
-    auto reqJson = nlohmann::json::parse(context.req.body);
-    auto effect = reqJson.get<shared_ptr<ILEDEffect>>();
+    auto effect = ParseBodyAs<shared_ptr<ILEDEffect>>(context);
+    size_t effectIndex = numeric_limits<size_t>::max();
 
-    auto writeLock = context.Lock();
-    auto canvas = context.controller.GetCanvasById(canvasId);
-    auto &manager = canvas->Effects();
-    const bool wantsToRun = manager.WantsToRun();
-    manager.Stop();
-    manager.AddEffect(effect);
-    const auto effectIndex = manager.EffectCount() - 1;
-    context.Persist();
-    writeLock.unlock();
-
-    if (wantsToRun && manager.EffectCount() > 0)
-        manager.Start(*canvas);
+    MutateEffects(context, canvasId, [&](IEffectsManager &manager)
+    {
+        manager.AddEffect(effect);
+        effectIndex = manager.EffectCount() - 1;
+    });
 
     return effectIndex;
 }
@@ -182,26 +198,17 @@ inline shared_ptr<ILEDEffect> UpdateEffect(
     int canvasId,
     int effectIndex)
 {
-    auto reqJson = nlohmann::json::parse(context.req.body);
-    auto effect = reqJson.get<shared_ptr<ILEDEffect>>();
+    auto effect = ParseBodyAs<shared_ptr<ILEDEffect>>(context);
 
-    auto writeLock = context.Lock();
-    auto canvas = context.controller.GetCanvasById(canvasId);
-    auto &manager = canvas->Effects();
-    auto effects = manager.Effects();
+    MutateEffects(context, canvasId, [&](IEffectsManager &manager)
+    {
+        auto effects = manager.Effects();
+        if (effectIndex < 0 || static_cast<size_t>(effectIndex) >= effects.size())
+            throw out_of_range("Effect not found: " + to_string(effectIndex));
 
-    if (effectIndex < 0 || static_cast<size_t>(effectIndex) >= effects.size())
-        throw out_of_range("Effect not found: " + to_string(effectIndex));
-
-    const bool wantsToRun = manager.WantsToRun();
-    manager.Stop();
-    effects[effectIndex] = effect;
-    manager.SetEffects(std::move(effects));
-    context.Persist();
-    writeLock.unlock();
-
-    if (wantsToRun && manager.EffectCount() > 0)
-        manager.Start(*canvas);
+        effects[effectIndex] = effect;
+        manager.SetEffects(std::move(effects));
+    });
 
     return effect;
 }
@@ -211,141 +218,20 @@ inline void DeleteEffect(
     int canvasId,
     int effectIndex)
 {
-    auto writeLock = context.Lock();
-    auto canvas = context.controller.GetCanvasById(canvasId);
-    auto &manager = canvas->Effects();
-    auto effects = manager.Effects();
+    MutateEffects(context, canvasId, [&](IEffectsManager &manager)
+    {
+        auto effects = manager.Effects();
+        if (effectIndex < 0 || static_cast<size_t>(effectIndex) >= effects.size())
+            throw out_of_range("Effect not found: " + to_string(effectIndex));
 
-    if (effectIndex < 0 || static_cast<size_t>(effectIndex) >= effects.size())
-        throw out_of_range("Effect not found: " + to_string(effectIndex));
+        effects.erase(effects.begin() + effectIndex);
 
-    const bool wantsToRun = manager.WantsToRun();
-    manager.Stop();
-    effects.erase(effects.begin() + effectIndex);
-
-    const auto nextIndex = NormalizeCurrentEffectIndex(manager, effects.size());
-    manager.SetEffects(std::move(effects));
-    manager.SetCurrentEffectIndex(nextIndex == numeric_limits<size_t>::max() ? -1 : static_cast<int>(nextIndex));
-
-    context.Persist();
-    writeLock.unlock();
-
-    if (wantsToRun && manager.EffectCount() > 0)
-        manager.Start(*canvas);
+        const auto nextIndex = NormalizeCurrentEffectIndex(manager, effects.size());
+        manager.SetEffects(std::move(effects));
+        manager.SetCurrentEffectIndex(nextIndex == numeric_limits<size_t>::max() ? -1 : static_cast<int>(nextIndex));
+    });
 }
 
-inline nlohmann::json BuildEffectCatalog()
-{
-    using nlohmann::json;
-
-    const auto paletteDefaults = json{
-        {"colors", StandardPalettes::Rainbow},
-        {"blend", true}
-    };
-
-    return json{
-        {"effects", json::array({
-            {
-                {"type", typeid(SolidColorFill).name()},
-                {"label", "Solid Color Fill"},
-                {"defaults", json{{"color", CRGB(255, 96, 64)}}},
-                {"fields", json::array({
-                    {{"path", "color"}, {"label", "Color"}, {"input", "color"}}
-                })}
-            },
-            {
-                {"type", typeid(DaveDebugEffect).name()},
-                {"label", "Dave Debug"},
-                {"defaults", json::object()},
-                {"fields", json::array()}
-            },
-            {
-                {"type", typeid(PaletteEffect).name()},
-                {"label", "Palette Scroll"},
-                {"defaults", json{
-                    {"palette", paletteDefaults},
-                    {"ledColorPerSecond", 3.0},
-                    {"ledScrollSpeed", 0.0},
-                    {"density", 1.0},
-                    {"everyNthDot", 1.0},
-                    {"dotSize", 1},
-                    {"rampedColor", false},
-                    {"brightness", 1.0},
-                    {"mirrored", false}
-                }},
-                {"fields", json::array({
-                    {{"path", "palette.colors"}, {"label", "Palette Colors"}, {"input", "json"}},
-                    {{"path", "palette.blend"}, {"label", "Blend Colors"}, {"input", "checkbox"}},
-                    {{"path", "ledColorPerSecond"}, {"label", "Color Rate"}, {"input", "number"}, {"step", 0.1}},
-                    {{"path", "ledScrollSpeed"}, {"label", "Scroll Speed"}, {"input", "number"}, {"step", 0.1}},
-                    {{"path", "density"}, {"label", "Density"}, {"input", "number"}, {"step", 0.01}},
-                    {{"path", "everyNthDot"}, {"label", "Every Nth Dot"}, {"input", "number"}, {"step", 0.1}},
-                    {{"path", "dotSize"}, {"label", "Dot Size"}, {"input", "number"}, {"step", 1}, {"min", 1}},
-                    {{"path", "rampedColor"}, {"label", "Ramped Color"}, {"input", "checkbox"}},
-                    {{"path", "brightness"}, {"label", "Brightness"}, {"input", "number"}, {"step", 0.05}, {"min", 0.0}, {"max", 1.0}},
-                    {{"path", "mirrored"}, {"label", "Mirrored"}, {"input", "checkbox"}}
-                })}
-            },
-            {
-                {"type", typeid(ColorWaveEffect).name()},
-                {"label", "Color Wave"},
-                {"defaults", json{{"speed", 0.5}, {"waveFrequency", 10.0}}},
-                {"fields", json::array({
-                    {{"path", "speed"}, {"label", "Speed"}, {"input", "number"}, {"step", 0.1}},
-                    {{"path", "waveFrequency"}, {"label", "Wave Frequency"}, {"input", "number"}, {"step", 0.1}}
-                })}
-            },
-            {
-                {"type", typeid(StarfieldEffect).name()},
-                {"label", "Starfield"},
-                {"defaults", json{{"starCount", 100}}},
-                {"fields", json::array({
-                    {{"path", "starCount"}, {"label", "Star Count"}, {"input", "number"}, {"step", 1}, {"min", 1}}
-                })}
-            },
-            {
-                {"type", typeid(BouncingBallEffect).name()},
-                {"label", "Bouncing Balls"},
-                {"defaults", json{{"ballCount", 5}, {"ballSize", 1}, {"mirrored", true}, {"erase", true}}},
-                {"fields", json::array({
-                    {{"path", "ballCount"}, {"label", "Ball Count"}, {"input", "number"}, {"step", 1}, {"min", 1}},
-                    {{"path", "ballSize"}, {"label", "Ball Size"}, {"input", "number"}, {"step", 1}, {"min", 1}},
-                    {{"path", "mirrored"}, {"label", "Mirrored"}, {"input", "checkbox"}},
-                    {{"path", "erase"}, {"label", "Erase"}, {"input", "checkbox"}}
-                })}
-            },
-            {
-                {"type", typeid(FireworksEffect).name()},
-                {"label", "Fireworks"},
-                {"defaults", json{
-                    {"maxSpeed", 175.0},
-                    {"newParticleProbability", 1.0},
-                    {"particlePreignitionTime", 0.0},
-                    {"particleIgnition", 0.2},
-                    {"particleHoldTime", 0.0},
-                    {"particleFadeTime", 2.0},
-                    {"particleSize", 1.0}
-                }},
-                {"fields", json::array({
-                    {{"path", "maxSpeed"}, {"label", "Max Speed"}, {"input", "number"}, {"step", 1}},
-                    {{"path", "newParticleProbability"}, {"label", "Spawn Probability"}, {"input", "number"}, {"step", 0.05}},
-                    {{"path", "particlePreignitionTime"}, {"label", "Pre-Ignition"}, {"input", "number"}, {"step", 0.05}},
-                    {{"path", "particleIgnition"}, {"label", "Ignition"}, {"input", "number"}, {"step", 0.05}},
-                    {{"path", "particleHoldTime"}, {"label", "Hold Time"}, {"input", "number"}, {"step", 0.05}},
-                    {{"path", "particleFadeTime"}, {"label", "Fade Time"}, {"input", "number"}, {"step", 0.05}},
-                    {{"path", "particleSize"}, {"label", "Particle Size"}, {"input", "number"}, {"step", 0.1}, {"min", 0.1}}
-                })}
-            },
-            {
-                {"type", typeid(MP4PlaybackEffect).name()},
-                {"label", "MP4 Playback"},
-                {"defaults", json{{"filePath", "./media/mp4/goldendollars.mp4"}}},
-                {"fields", json::array({
-                    {{"path", "filePath"}, {"label", "File Path"}, {"input", "text"}}
-                })}
-            }
-        })}
-    };
-}
+nlohmann::json BuildEffectCatalog();
 
 } // namespace ndscpp::api

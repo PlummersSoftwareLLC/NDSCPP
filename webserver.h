@@ -1,8 +1,5 @@
 #pragma once
-#include <iostream>
-#include <vector>
 #include <memory>
-#include <ranges>
 #include <shared_mutex>
 #include <future>
 #include <functional>
@@ -232,12 +229,9 @@ public:
             {
                 try
                 {
-                    WithContext(req, [](api::ApiRequestContext &context)
+                    WithContext(req, api::ApplyCanvasesRequest, [](shared_ptr<ICanvas> canvas)
                     {
-                        api::ApplyCanvasesRequest(context, [](shared_ptr<ICanvas> canvas)
-                        {
-                            canvas->Effects().Start(*canvas);
-                        });
+                        canvas->Effects().Start(*canvas);
                     });
                     return crow::response(crow::OK);
                 }
@@ -253,12 +247,9 @@ public:
             {
                 try
                 {
-                    WithContext(req, [](api::ApiRequestContext &context)
+                    WithContext(req, api::ApplyCanvasesRequest, [](shared_ptr<ICanvas> canvas)
                     {
-                        api::ApplyCanvasesRequest(context, [](shared_ptr<ICanvas> canvas)
-                        {
-                            canvas->Effects().Stop();
-                        });
+                        canvas->Effects().Stop();
                     });
                     return crow::response(crow::OK);
                 }
@@ -281,10 +272,7 @@ public:
                     unique_lock writeLock(_apiMutex);
                     auto canvas = _controller.GetCanvasById(static_cast<uint16_t>(canvasId));
                     canvas->Effects().SetCurrentEffect(static_cast<size_t>(effectIndex), *canvas);
-                    WithContext(req, [](api::ApiRequestContext &context)
-                    {
-                        api::PersistController(context);
-                    });
+                    WithContext(req, api::PersistController);
                     return crow::response(crow::OK);
                 }
                 catch (const out_of_range& e)
