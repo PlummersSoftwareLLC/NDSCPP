@@ -26,7 +26,7 @@ jobs:
     - name: Set up dependencies (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        sudo apt-get update 
+        sudo apt-get update
         sudo apt-get install -y libasio-dev zlib1g-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev libcurl4-gnutls-dev libspdlog-dev libgtest-dev
         git clone https://github.com/libcpr/cpr.git
         cd cpr && mkdir build && cd build
@@ -46,35 +46,10 @@ jobs:
 
     - name: Run tests
       # For the API tests, we start ndscpp in the background and then run the tests.
-      # Killing ndscpp is a bit rude and technically unnecessary, but we've been 
+      # Killing ndscpp is a bit rude and technically unnecessary, but we've been
       # raised to clean up after ourselves, so that's what we do.
       run: |
         ./ndscpp > /dev/null 2>&1 &
         sleep 1
         LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/lib ./tests/tests
         sudo killall -9 ndscpp
-
-  build-web:
-
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: ndsweb
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v6
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: '20'
-        cache: 'npm'
-        cache-dependency-path: ndsweb/package-lock.json
-
-    - name: Install dependencies
-      run: npm install --legacy-peer-deps
-
-    - name: Build ndsweb
-      run: npx nx build
