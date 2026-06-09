@@ -757,8 +757,21 @@ async function handleSaveConfig() {
   }
 }
 
+function resolveApiUrl(url) {
+  if (/^https?:\/\//i.test(url)) {
+    return url;
+  }
+
+  if (!url.startsWith("/api/")) {
+    return url;
+  }
+
+  const apiPort = Number(window.NDSCPP_API_PORT || 7777);
+  return `${window.location.protocol}//${window.location.hostname}:${apiPort}${url}`;
+}
+
 async function fetchJson(url, options) {
-  const response = await fetch(url, { cache: "no-store", ...options });
+  const response = await fetch(resolveApiUrl(url), { cache: "no-store", ...options });
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || `Request failed: ${response.status}`);
@@ -941,7 +954,7 @@ async function runPreviewLoop(canvasId, loop) {
   while (loop.running) {
     let delayMs = 33; // default ~30fps
     try {
-      const resp = await fetch(`/api/canvases/${canvasId}/pixels`);
+      const resp = await fetch(resolveApiUrl(`/api/canvases/${canvasId}/pixels`));
       if (!resp.ok) throw new Error(resp.statusText);
       const buf = await resp.arrayBuffer();
       const view = new DataView(buf);
@@ -1229,12 +1242,12 @@ function renderCanvasFolderTab() {
     <div class="folder-tab folder-tab-green">
       <a href="#" class="folder-tab-action" data-action="add-canvas">&#x2795; New</a>
       <span class="folder-tab-sep">&#x2502;</span>
-      <a href="#" class="folder-tab-action ${canEdit ? "" : "disabled"}" 
+      <a href="#" class="folder-tab-action ${canEdit ? "" : "disabled"}"
          ${canEdit ? `data-action="edit-canvas" data-canvas-id="${selectedId}"` : ""}>
         &#x270E; Edit
       </a>
       <span class="folder-tab-sep">&#x2502;</span>
-      <a href="#" class="folder-tab-action ${canDelete ? "" : "disabled"}" 
+      <a href="#" class="folder-tab-action ${canDelete ? "" : "disabled"}"
          ${canDelete ? `data-action="delete-selected-canvases"` : ""}>
         &#x1F5D1; Delete${selectedCount > 1 ? ` (${selectedCount})` : ""}
       </a>
@@ -1244,7 +1257,7 @@ function renderCanvasFolderTab() {
 
 function renderFolderTab(canvasId, type, itemCount) {
   const isFeature = type === "feature";
-  const selectedSet = isFeature 
+  const selectedSet = isFeature
     ? (state.selectedFeatures[canvasId] || new Set())
     : (state.selectedEffects[canvasId] || new Set());
   const selectedCount = selectedSet.size;
@@ -1263,12 +1276,12 @@ function renderFolderTab(canvasId, type, itemCount) {
     <div class="folder-tab folder-tab-${colorClass}">
       <a href="#" class="folder-tab-action" data-action="add-${type}" data-canvas-id="${canvasId}">&#x2795; New</a>
       <span class="folder-tab-sep">&#x2502;</span>
-      <a href="#" class="folder-tab-action ${canEdit ? "" : "disabled"}" 
+      <a href="#" class="folder-tab-action ${canEdit ? "" : "disabled"}"
          ${canEdit ? `data-action="edit-${type}" data-canvas-id="${canvasId}" data-${isFeature ? "feature-id" : "effect-index"}="${selectedId}"` : ""}>
         &#x270E; Edit
       </a>
       <span class="folder-tab-sep">&#x2502;</span>
-      <a href="#" class="folder-tab-action ${canDelete ? "" : "disabled"}" 
+      <a href="#" class="folder-tab-action ${canDelete ? "" : "disabled"}"
          ${canDelete ? `data-action="delete-selected-${type}s" data-canvas-id="${canvasId}"` : ""}>
         &#x1F5D1; Delete${selectedCount > 1 ? ` (${selectedCount})` : ""}
       </a>
@@ -1465,12 +1478,12 @@ function handleTableDblClick(event) {
 
 async function handleTableChange(event) {
   const target = event.target;
-  
+
   // Handle checkbox selection changes
   if (target instanceof HTMLInputElement && target.type === "checkbox" && target.classList.contains("row-checkbox")) {
     const action = target.dataset.action;
     const canvasId = target.dataset.canvasId !== undefined ? Number(target.dataset.canvasId) : null;
-    
+
     if (action === "toggle-canvas-select") {
       if (canvasId !== null) {
         toggleCanvasSelection(canvasId);
@@ -1601,14 +1614,14 @@ async function setCurrentEffect(canvasId, effectIndex) {
 async function deleteSelectedFeatures(canvasId) {
   const selected = state.selectedFeatures[canvasId];
   if (!selected || selected.size === 0) return;
-  
+
   const featureIds = Array.from(selected);
   const count = featureIds.length;
-  
+
   if (!confirm(`Delete ${count} selected feature${count > 1 ? "s" : ""}?`)) {
     return;
   }
-  
+
   try {
     for (const featureId of featureIds) {
       await deleteFeatureById(canvasId, featureId, null, true);
@@ -1624,15 +1637,15 @@ async function deleteSelectedFeatures(canvasId) {
 async function deleteSelectedEffects(canvasId) {
   const selected = state.selectedEffects[canvasId];
   if (!selected || selected.size === 0) return;
-  
+
   // Sort descending so we delete from end first (to preserve indices)
   const indices = Array.from(selected).sort((a, b) => b - a);
   const count = indices.length;
-  
+
   if (!confirm(`Delete ${count} selected effect${count > 1 ? "s" : ""}?`)) {
     return;
   }
-  
+
   try {
     for (const effectIndex of indices) {
       await deleteEffectByIndex(canvasId, effectIndex, null, true);
@@ -1662,7 +1675,7 @@ function pruneExpandedSet() {
       delete state.sectionExpansions[canvasId];
     }
   });
-  
+
   // Prune stale feature selections
   Object.keys(state.selectedFeatures).forEach((canvasId) => {
     const numCanvasId = Number(canvasId);
@@ -1678,7 +1691,7 @@ function pruneExpandedSet() {
       });
     }
   });
-  
+
   // Prune stale effect selections
   Object.keys(state.selectedEffects).forEach((canvasId) => {
     const numCanvasId = Number(canvasId);

@@ -163,7 +163,7 @@ public:
                         vector<uint8_t> rgbBuffer(static_cast<size_t>(canvasWidth) * canvasHeight * sizeof(CRGB));
 
                         uint8_t* dstData[1] = { rgbBuffer.data() };
-                        int dstLinesize[1] = { sizeof(CRGB) * canvasWidth };
+                        int dstLinesize[1] = { static_cast<int>(sizeof(CRGB) * canvasWidth) };
 
                         sws_scale(_swsCtx, _frame->data, _frame->linesize, 0, _codecCtx->height, dstData, dstLinesize);
 
