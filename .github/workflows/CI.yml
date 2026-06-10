@@ -49,8 +49,9 @@ jobs:
       # Killing ndscpp is a bit rude and technically unnecessary, but we've been
       # raised to clean up after ourselves, so that's what we do.
       run: |
+        make config.led
         ./ndscpp > /dev/null 2>&1 &
-        sleep 5
+        sleep 1
         LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/lib ./tests/tests
         sudo killall -9 ndscpp
 
