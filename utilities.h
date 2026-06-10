@@ -15,11 +15,39 @@ using namespace std;
 #include <cstdint>
 #include <cstring>
 #include <initializer_list>
+#include <type_traits>
 #include <zlib.h>
 #include "pixeltypes.h"
 
 class Utilities
 {
+
+private:
+    template <typename... Ints>
+    static string FormatRouteImpl(const char *format, const char *suffix, Ints... values)
+    {
+        string result(format);
+
+        // Replace one placeholder per value, from left to right.
+        const array<int, sizeof...(values)> replacements{static_cast<int>(values)...};
+        for (int value : replacements)
+        {
+            size_t pos = result.find("<int>");
+            if (pos == string::npos)
+                break;
+
+            result.replace(pos, 5, to_string(value));
+        }
+
+        if (suffix != nullptr && suffix[0] != '\0')
+        {
+            result += " ";
+            result += suffix;
+        }
+
+        return result;
+    }
+
 public:
 
     static constexpr float constexpr_sqrt(float x, float epsilon = 1e-5f)
@@ -27,7 +55,7 @@ public:
         float guess = x / 2.0f;
         float result = (guess + x / guess) / 2.0f;
 
-        while ((result - guess) > epsilon || (result - guess) < -epsilon) 
+        while ((result - guess) > epsilon || (result - guess) < -epsilon)
         {
             guess = result;
             result = (guess + x / guess) / 2.0f;
@@ -253,6 +281,24 @@ public:
         compressedData.resize(stream.total_out);
 
         return compressedData;
+    }
+
+    // Format a route string by replacing <int> placeholders with integer values.
+    // Example: FormatRoute("/api/canvases/<int>/features/<int>", 5, 3)
+    //          returns "/api/canvases/5/features/3"
+    template <size_t N, typename... Args, enable_if_t<(is_same_v<decay_t<Args>, int> && ...), int> = 0>
+    static string FormatRoute(const char (&format)[N], Args... args)
+    {
+        return FormatRouteImpl(format, nullptr, args...);
+    }
+
+    // Format a route string, then append a suffix separated by a space.
+    // Example: FormatRoute("/api/canvases/<int>", "(live)", 5)
+    //          returns "/api/canvases/5 (live)"
+    template <size_t N, size_t M, typename... Args, enable_if_t<(is_same_v<decay_t<Args>, int> && ...), int> = 0>
+    static string FormatRoute(const char (&format)[N], const char (&suffix)[M], Args... args)
+    {
+        return FormatRouteImpl(format, suffix, args...);
     }
 };
 
