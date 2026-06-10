@@ -28,8 +28,8 @@ using namespace std;
 
 // How long to wait for a connection to be established or data sent
 
-constexpr auto kConnectTimeout = 3000ms; 
-constexpr auto kSendTimeout    = 2000ms;
+constexpr auto kConnectTimeout = 10000ms; 
+constexpr auto kSendTimeout    = 5000ms;
 
 // SpeedTracker
 // 
@@ -41,7 +41,7 @@ constexpr auto kSendTimeout    = 2000ms;
 class SpeedTracker
 {
 private:
-    static constexpr milliseconds kSpeedWindowMS{3000}; // 3 second window
+    static constexpr microseconds kSpeedWindowUS{3000000}; // 3 second window
     static constexpr double kPreviousWindowWeight{0.3}; // Weight for previous window in average
 
     uint64_t _currentWindowBytes{0};
@@ -65,19 +65,19 @@ public:
     uint64_t UpdateBytesPerSecond()
     {
         auto now = system_clock::now();
-        auto elapsed = duration_cast<milliseconds>(now - _windowStartTime);
+        auto elapsed = duration_cast<microseconds>(now - _windowStartTime);
 
         // If we haven't completed a window yet, calculate based on partial window
-        if (elapsed < kSpeedWindowMS)
+        if (elapsed < kSpeedWindowUS)
         {
             if (elapsed.count() == 0)
                 return 0; // Avoid division by zero
 
             // Scale up partial window to full second
-            double currentRate = (_currentWindowBytes * 1000.0) / elapsed.count();
+            double currentRate = (_currentWindowBytes * 1000000.0) / elapsed.count();
 
             // Blend with previous window data
-            double previousRate = (_previousWindowBytes * 1000.0) / kSpeedWindowMS.count();
+            double previousRate = (_previousWindowBytes * 1000000.0) / kSpeedWindowUS.count();
             return static_cast<uint64_t>(
                 (currentRate * (1.0 - kPreviousWindowWeight)) +
                 (previousRate * kPreviousWindowWeight));
@@ -89,13 +89,13 @@ public:
         _windowStartTime = now;
 
         // Calculate blended rate
-        double previousRate = (_previousWindowBytes * 1000.0) / kSpeedWindowMS.count();
+        double previousRate = (_previousWindowBytes * 1000000.0) / kSpeedWindowUS.count();
         return static_cast<uint64_t>(previousRate);
     }
 
     uint64_t GetLastBytesPerSecond() const
     {
-        return (_previousWindowBytes * 1000) / kSpeedWindowMS.count();
+        return (_previousWindowBytes * 1000000) / kSpeedWindowUS.count();
     }
 };
 
@@ -207,18 +207,18 @@ struct ClientResponse
 
     friend void from_json(const nlohmann::json& j, ClientResponse& response) 
     {
-        response.size = j.at("responseSize").get<uint8_t>();
-        response.sequence = j.at("sequenceNumber").get<uint32_t>();
+        response.size = j.at("responseSize").get<uint32_t>();
+        response.sequence = j.at("sequenceNumber").get<uint64_t>();
         response.flashVersion = j.at("flashVersion").get<uint32_t>();
-        response.currentClock = j.at("currentClock").get<uint64_t>();
-        response.oldestPacket = j.at("oldestPacket").get<uint64_t>();
-        response.newestPacket = j.at("newestPacket").get<uint64_t>();
-        response.brightness = j.at("brightness").get<uint8_t>();
-        response.wifiSignal = j.at("wifiSignal").get<int8_t>();
+        response.currentClock = j.at("currentClock").get<double>();
+        response.oldestPacket = j.at("oldestPacket").get<double>();
+        response.newestPacket = j.at("newestPacket").get<double>();
+        response.brightness = j.at("brightness").get<double>();
+        response.wifiSignal = j.at("wifiSignal").get<double>();
         response.bufferSize = j.at("bufferSize").get<uint32_t>();
         response.bufferPos = j.at("bufferPos").get<uint32_t>();
-        response.fpsDrawing = j.at("fpsDrawing").get<float>();
-        response.watts = j.at("watts").get<float>();
+        response.fpsDrawing = j.at("fpsDrawing").get<uint32_t>();
+        response.watts = j.at("watts").get<uint32_t>();
     }
 
 } __attribute__((packed)); // Packed attribute required for network protocol compatibility
@@ -362,7 +362,7 @@ public:
         constexpr auto kMaxResponseAge = 2s;
 
         lock_guard lock(_responseMutex);
-        if (_lastResponseTime - system_clock::now() > kMaxResponseAge)
+        if (system_clock::now() - _lastResponseTime > kMaxResponseAge)
             return ClientResponse {}; // Return empty response if too old
 
         return _lastClientResponse; 
@@ -428,39 +428,23 @@ private:
 
     void WorkerLoop()
     {
-        steady_clock::time_point lastSendTime = steady_clock::now();
-        constexpr auto kMaxBatchSize = 20;
-        constexpr auto kMaxBatchDelay = 1000ms;  // Fixed variable name
+        steady_clock::time_point lastPollTime = steady_clock::now();
+        constexpr auto kMaxBatchSize = 1;
         constexpr auto reconnectDelay = 1000ms;
-
+        constexpr auto pollInterval = 1000ms;
+        
+        vector<uint8_t> combinedBuffer;
+        combinedBuffer.reserve(4096); // Larger reserve for batched frames
         while (_running)
         {
             try
             {
-                vector<uint8_t> combinedBuffer;
                 size_t packetCount = 0;
-
                 auto now = steady_clock::now();
-                auto bTimeToSend = duration_cast<milliseconds>(now - lastSendTime) >= kMaxBatchDelay;
 
-                // Calculate total bytes first to preallocate buffer
+                if (!_frameQueue.empty())
                 {
-                    unique_lock<mutex> lock(_queueMutex);
-                    size_t tempCount = 0;
-                    size_t tempBytes = 0;
-                    auto queueCopy = _frameQueue;
-                    while (!queueCopy.empty() && tempCount < kMaxBatchSize)
-                    {
-                        tempBytes += queueCopy.front().size();
-                        tempCount++;
-                        queueCopy.pop();
-                    }
-                    if (tempBytes > 0) 
-                        combinedBuffer.reserve(tempBytes);
-                }
-
-                if (!_frameQueue.empty() && (_frameQueue.size() >= kMaxBatchSize || bTimeToSend))
-                {
+                    combinedBuffer.clear();
                     unique_lock<mutex> lock(_queueMutex);
                     
                     while (!_frameQueue.empty() && packetCount < kMaxBatchSize)
@@ -475,19 +459,22 @@ private:
 
                 if (packetCount > 0)
                 {
-                    logger->debug("Sending {} packets to {} [{}]", packetCount, _hostName, _friendlyName);
+                    SendFrame(std::move(combinedBuffer));
+                    _speedTracker.AddBytes(combinedBuffer.size());
+                }
 
-                    if (!combinedBuffer.empty())
+                // Check for responses much less frequently
+                if (now - lastPollTime >= pollInterval)
+                {
+                    lastPollTime = now;
+                    _speedTracker.UpdateBytesPerSecond();
+                    
+                    optional<ClientResponse> response = ReadSocketResponse();
+                    if (response)
                     {
-                        lastSendTime = steady_clock::now();
-                        optional<ClientResponse> response = SendFrame(std::move(combinedBuffer));
-                        if (response)
-                        {
-                            lock_guard lock(_responseMutex);
-                            _lastClientResponse = std::move(*response);
-                            _lastResponseTime = system_clock::now();
-                        }
-                        _speedTracker.UpdateBytesPerSecond();
+                        lock_guard lock(_responseMutex);
+                        _lastClientResponse = std::move(*response);
+                        _lastResponseTime = system_clock::now();
                     }
                 }
             }
@@ -496,17 +483,15 @@ private:
                 logger->warn("SocketChannel WorkerLoop exception: {}", e.what());
                 CloseSocket();
                 
-                // Wait before attempting to reconnect
-                auto now = system_clock::now();
-                if (duration_cast<milliseconds>(now - _lastConnectionAttempt) < reconnectDelay)
+                auto nowUs = system_clock::now();
+                if (duration_cast<microseconds>(nowUs - _lastConnectionAttempt) < reconnectDelay)
                 {
-                    cout << "Waiting for " << duration_cast<milliseconds>(reconnectDelay - (now - _lastConnectionAttempt)).count() << "ms before reconnecting" << endl; 
-                    this_thread::sleep_for(reconnectDelay - (now - _lastConnectionAttempt));
+                    this_thread::sleep_for(reconnectDelay - (nowUs - _lastConnectionAttempt));
                     continue;
                 }
             }
 
-            this_thread::sleep_for(milliseconds(1));
+            this_thread::sleep_for(1ms);
         }
     }
 
@@ -533,36 +518,38 @@ private:
                 {
                     OldClientResponse oldResponse;
                     readBytes = recv(_socketFd, &oldResponse, sizeof(OldClientResponse), 0);
-                    if (readBytes == sizeof(OldClientResponse))
+                    if (readBytes < (ssize_t)sizeof(OldClientResponse))
                     {
-                        ClientResponse response;
-                        response = oldResponse;
-                        response.TranslateClientResponse();
-                        lastResponse = response;
-                        continue;  // Check for more data
+                        // Incomplete read, leave it for next time (or handle error if < 0)
+                        return lastResponse;
                     }
+                    ClientResponse response;
+                    response = oldResponse;
+                    lastResponse = response;
+                    lastResponse->TranslateClientResponse();
+                    continue;
                 }
 
-                logger->warn("Invalid byte count reading response from {} [{}]", _hostName, _friendlyName);
-                // Invalid byte count; eat the contents
-                vector<uint8_t> tempBuffer(byteCount);
-                recv(_socketFd, tempBuffer.data(), byteCount, 0);
-                continue;  // Check for more data
+                // If it's not a known size, the stream is truly desynced.
+                logger->warn("Invalid byte count {} reading response from {} [{}]. Resetting socket.", byteCount, _hostName, _friendlyName);
+                CloseSocket();
+                return nullopt;
             }
 
             // Read the full response
             vector<uint8_t> buffer(cbToRead);
             readBytes = recv(_socketFd, buffer.data(), cbToRead, 0);
-            if (readBytes == static_cast<ssize_t>(cbToRead))
+            if (readBytes < (ssize_t)cbToRead)
             {
-                ClientResponse response;
-                memcpy(&response, buffer.data(), cbToRead);
-                response.TranslateClientResponse();
-                lastResponse = response;
-                continue;  // Check for more data
+                // Incomplete read, leave it for next time
+                return lastResponse;
             }
-            logger->warn("Error reading response from {} [{}]", _hostName, _friendlyName);
-            break;  // Error reading data
+
+            ClientResponse response;
+            memcpy(&response, buffer.data(), cbToRead);
+            response.TranslateClientResponse();
+            lastResponse = response;
+            continue;  // Check for more data
         }
 
         return lastResponse;
@@ -585,18 +572,21 @@ private:
         int keepcnt = 3;          // Number of keepalive probes before declaring dead
         int keepidle = 1;         // Time in seconds before sending keepalive probes
         int keepintvl = 1;        // Time in seconds between keepalive probes
+        int nodelay = 0;
 
-        // On macOS, TCP_KEEPIDLE is called TCP_KEEPALIVE
         #ifdef __APPLE__
-            #define TCP_KEEPIDLE TCP_KEEPALIVE
+            #ifndef TCP_KEEPIDLE
+                #define TCP_KEEPIDLE TCP_KEEPALIVE
+            #endif
         #endif
 
         if (setsockopt(socketFd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)) < 0 ||
-            setsockopt(socketFd, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt)) < 0 ||
             setsockopt(socketFd, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle)) < 0 ||
-            setsockopt(socketFd, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl)) < 0)
+            setsockopt(socketFd, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl)) < 0 ||
+            setsockopt(socketFd, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt)) < 0 ||
+            setsockopt(socketFd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) < 0)
         {
-            logger->warn("Could not set keepalive options for {} [{}]", _hostName, _friendlyName);
+            logger->warn("Could not set socket options for {} [{}]", _hostName, _friendlyName);
             return false;
         }           
 
@@ -613,14 +603,14 @@ private:
         return true;
     }
 
-    optional<ClientResponse> SendFrame(const vector<uint8_t>&& frame)
+    void SendFrame(const vector<uint8_t>&& frame)
     {
         if (_socketFd == -1 && !ConnectSocket())
         {
             logger->warn("Could not connect to {} [{}] in SendFrame", _hostName, _friendlyName);
             lock_guard lock(_mutex);
             _isConnected = false;
-            return nullopt;
+            return;
         }
 
         size_t totalSent = 0;
@@ -647,19 +637,19 @@ private:
 
                     CloseSocket();
                     if (!ConnectSocket()) 
-                        return nullopt;
+                        return;
                     continue;
                 }
                 
                 if ((errno == EWOULDBLOCK || errno == EAGAIN) && ((steady_clock::now() - startTime) < kSendTimeout))
                 {
-                    this_thread::sleep_for(100ms);
+                    this_thread::sleep_for(1ms);
                     continue;
                 }
                 logger->warn("Socket timed out for {} [{}] errno={}", _hostName, _friendlyName, errno);
 
                 CloseSocket();
-                return nullopt;
+                return;
             }
         }
 
@@ -668,8 +658,6 @@ private:
             _isConnected = true;
             _speedTracker.AddBytes(totalSent);
         }
-
-        return _running ? ReadSocketResponse() : nullopt;
     }
 
 
@@ -737,7 +725,11 @@ private:
         }
 
         _reconnectCount++;
-        logger->info("Connection number {} to {}:{} [{}]", _reconnectCount, _hostName, _port, _friendlyName);
+        if (_reconnectCount == 1)
+            logger->info("Connected to {}:{} [{}]", _hostName, _port, _friendlyName);
+        else
+            logger->debug("Reconnection #{} to {}:{} [{}]", _reconnectCount, _hostName, _port, _friendlyName);
+            
         _socketFd = tempSocket;
         return true;
     }

@@ -9,6 +9,7 @@ using namespace chrono;
 #include "effects/starfield.h"
 #include "effects/videoeffect.h"
 #include "effects/bouncingballeffect.h"
+#include "effects/auroraeffect.h"
 
 // EffectsManager
 //
@@ -26,12 +27,13 @@ class EffectsManager : public IEffectsManager
     int           _currentEffectIndex; // Index of the current effect
     atomic<bool>  _running;
     bool          _wantsToRun;
-    mutable mutex _effectsMutex;  // Add mutex as member
+    mutable recursive_mutex _effectsMutex;  // Add recursive_mutex as member
     vector<shared_ptr<ILEDEffect>> _effects;
     thread        _workerThread;
+    bool          _lastScheduleState = true; // Track last schedule state to detect transitions
 
 public:
-    EffectsManager(uint16_t fps) : _fps(fps), _currentEffectIndex(-1), _wantsToRun(true), _running(false) // No effect selected initially
+    EffectsManager(uint16_t fps) : _fps(fps), _currentEffectIndex(-1), _wantsToRun(true), _running(false), _lastScheduleState(true) // No effect selected initially
     {
     }
 
@@ -62,7 +64,6 @@ public:
 
     vector<shared_ptr<ILEDEffect>> Effects() const override
     {
-        lock_guard lock(_effectsMutex);
         return _effects;
     }
 
@@ -122,10 +123,10 @@ public:
     }
 
     // Update the current effect and render it to the canvas
-    void UpdateCurrentEffect(ICanvas &canvas, milliseconds millisDelta) override
+    void UpdateCurrentEffect(ICanvas &canvas, microseconds microsDelta) override
     {
-        if (_running && IsEffectSelected())
-            _effects[_currentEffectIndex]->Update(canvas, millisDelta);
+        if (IsEffectSelected())
+            _effects[_currentEffectIndex]->Update(canvas, microsDelta);
     }
 
     // Switch to the next effect
@@ -186,48 +187,120 @@ public:
 
         _workerThread = thread([this, &canvas]()
         {
-            auto frameDuration = 1000ms / _fps; // Target duration per frame
-            auto nextFrameTime = steady_clock::now();
-            constexpr auto bUseCompression = true;
+            const auto frameDurationNs = nanoseconds(1000000000LL / _fps); 
+            const auto startTimeSteady = steady_clock::now();
+            const auto startTimeSystem = system_clock::now();
 
-            // Starting the canvas should start the effect at least one time, as many effects
-            // have one-time setup in their Start() method
-            
-            StartCurrentEffect(canvas);
+            auto lastFrameTimeSteady = startTimeSteady;
+            auto lastHeartbeatTime = startTimeSteady;
+            auto lastScheduleCheck = startTimeSteady;
+            auto frameCount = 0LL;
+
+            {
+                lock_guard lock(_effectsMutex);
+                StartCurrentEffect(canvas);
+            }
 
             while (_running)
             {
-                {
-                    lock_guard lock(_effectsMutex);
+                auto now = steady_clock::now();
 
-                    // Update the effects and enqueue frames
-                    UpdateCurrentEffect(canvas, frameDuration);
-                    for (const auto &feature : canvas.Features())
+                // When an effect is active, we check every frame. 
+                // When no effect is active, we check every 500ms to save CPU.
+                bool shouldCheckSchedule = _lastScheduleState || (now - lastScheduleCheck >= 500ms);
+
+                int activeIndex = -1;
+                if (shouldCheckSchedule)
+                {
+                    lastScheduleCheck = now;
+                    lock_guard lock(_effectsMutex);
+                    for (int i = 0; i < static_cast<int>(_effects.size()); ++i)
                     {
-                        auto frame = feature->GetDataFrame();
-                        if (bUseCompression)
+                        auto &effect = _effects[i];
+                        if (effect->GetSchedule() == nullptr || effect->GetSchedule()->IsActive())
                         {
-                            auto compressedFrame = feature->Socket()->CompressFrame(frame);
-                            feature->Socket()->EnqueueFrame(std::move(compressedFrame));
-                        }
-                        else
-                        {
-                            feature->Socket()->EnqueueFrame(std::move(frame));
+                            activeIndex = i;
+                            break;
                         }
                     }
                 }
-                
-                // We wait here while periodically checking _running
-                
-                auto now = steady_clock::now();
-                while (now < nextFrameTime && _running) {
-                    this_thread::sleep_for(min(steady_clock::duration(10ms), nextFrameTime - now));
-                    now = steady_clock::now(); // Update 'now' to avoid an infinite loop
+                else
+                {
+                    // If we didn't check, assume the state hasn't changed from "inactive"
+                    activeIndex = -1;
                 }
 
-                // Set the next frame target
-                nextFrameTime += frameDuration;
-            } });
+                // Calculate the actual target timestamp for this packet based on the wall clock
+                frameCount++;
+                auto nextFrameTimeSteady = startTimeSteady + (frameDurationNs * frameCount);
+                auto packetTimestamp = startTimeSystem + (frameDurationNs * frameCount);
+
+                if (activeIndex != -1) 
+                {
+                    if (activeIndex != _currentEffectIndex)
+                    {
+                        lock_guard lock(_effectsMutex);
+                        logger->info("Switching to effect '{}' based on schedule.", _effects[activeIndex]->Name());
+                        _currentEffectIndex = activeIndex;
+                        _effects[_currentEffectIndex]->Start(canvas);
+                    }
+
+                    {
+                        lock_guard lock(_effectsMutex);
+                        auto delta = duration_cast<microseconds>(now - lastFrameTimeSteady);
+                        UpdateCurrentEffect(canvas, delta);
+                    }
+
+                    for (const auto &feature : canvas.Features())
+                    {
+                        feature->Socket()->EnqueueFrame(feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp)));
+                    }
+                    _lastScheduleState = true;
+                    lastHeartbeatTime = now;
+                } 
+                else 
+                {
+                    if (_lastScheduleState || (now - lastHeartbeatTime) >= 2s) {
+                        {
+                            lock_guard lock(_effectsMutex);
+                            canvas.Graphics().Clear(CRGB::Black);
+                        }
+                        for (const auto &feature : canvas.Features())
+                        {
+                            feature->Socket()->EnqueueFrame(feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp)));
+                        }
+                        
+                        if (_lastScheduleState)
+                            logger->info("No scheduled effects are active for canvas '{}'. Sending heartbeats.", canvas.Name());
+                        
+                        _lastScheduleState = false;
+                        lastHeartbeatTime = now;
+                    }
+                }
+                
+                lastFrameTimeSteady = now;
+
+                // Drift detection and re-sync
+                auto actualTime = system_clock::now();
+                auto drift = duration_cast<microseconds>(packetTimestamp - actualTime).count();
+                if (abs(drift) > 200000) // 200ms in microseconds
+                {
+                    logger->debug("Canvas '{}' clock drift detected: {}us. Re-syncing.", canvas.Name(), drift);
+                    // To re-sync, we'd need to adjust startTimeSystem or frameCount, 
+                    // but for now we just log it as it should be much rarer now.
+                }
+
+                if (nextFrameTimeSteady < now - 1s) // Sane reset
+                {
+                    logger->warn("Canvas '{}' fell behind, resetting clock.", canvas.Name());
+                    // Reset to now
+                    return; // Re-entry will handle restart (or we could just reset variables here)
+                }
+
+                if (nextFrameTimeSteady > now)
+                    this_thread::sleep_until(nextFrameTimeSteady);
+            } 
+ });
     }
 
     // Stop the worker thread
@@ -245,6 +318,9 @@ public:
     {
         lock_guard lock(_effectsMutex);
         _effects = std::move(effects);
+        
+        if (_currentEffectIndex == -1 && !_effects.empty())
+            _currentEffectIndex = 0;
     }
 
     void SetCurrentEffectIndex(int index) override
@@ -290,15 +366,23 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
         jsonPair<SolidColorFill>(),
         jsonPair<PaletteEffect>(),
         jsonPair<StarfieldEffect>(),
-        jsonPair<MP4PlaybackEffect>()
+        jsonPair<MP4PlaybackEffect>(),
+        make_pair("AuroraEffect", jsonPair<AuroraEffect>().second)
 };
 
 // Dynamically serialize an effect to JSON based on its actual type
 
 inline void to_json(nlohmann::json &j, const ILEDEffect &effect)
 {
-    string type = typeid(effect).name();
+    string type = effect.Type();
     auto it = to_from_json_map.find(type);
+    if (it == to_from_json_map.end())
+    {
+        // Fallback to mangled name for backward compatibility and unregistered types
+        type = typeid(effect).name();
+        it = to_from_json_map.find(type);
+    }
+    
     if (it == to_from_json_map.end())
     {
         logger->error("Unknown effect type for serialization: {}", type);
@@ -351,14 +435,14 @@ inline void to_json(nlohmann::json &j, const IEffectsManager &manager)
         j["effects"].push_back(*effect);
 };
 
-// IEffectManager --> JSON
+// IEffectsManager --> JSON
 
 inline void from_json(const nlohmann::json &j, IEffectsManager &manager)
 {
-    manager.SetFPS(j.at("fps").get<uint16_t>());
-    manager.SetEffects(j.at("effects").get<vector<shared_ptr<ILEDEffect>>>());
-    manager.SetCurrentEffectIndex(j.at("currentEffectIndex").get<int>());
-    
+    manager.SetFPS(j.value("fps", uint16_t(30)));
+    manager.SetEffects(j.value("effects", vector<shared_ptr<ILEDEffect>>()));
+    manager.SetCurrentEffectIndex(j.value("currentEffectIndex", -1));
+
     // We deserialize the running state to a running *preference*. Directly starting the manager after
     // deserialization could create problems, and without having the canvas we can't start it anyway.
     if (j.contains("running"))

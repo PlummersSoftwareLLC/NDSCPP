@@ -9,10 +9,14 @@ DEPFLAGS=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 
 SOURCES=main.cpp
 EXECUTABLE=ndscpp
-CONFIG_FILES=config.led secrets.h
 DEPDIR=.deps
 OBJECTS:=$(SOURCES:.cpp=.o)
 DEPFILES:=$(SOURCES:%.cpp=$(DEPDIR)/%.d)
+
+# Runtime config files (don't trigger a rebuild)
+RUNTIME_CONFIG=config.led
+# Compile-time header dependencies
+COMPILE_CONFIG=secrets.h
 
 define helptext =
 Makefile for ndscpp
@@ -42,11 +46,11 @@ $(EXECUTABLE): $(OBJECTS)
 	@echo Linking $@...
 	@$(CC) $(LDFLAGS) $^ -o $@ $(LIBS)
 
-%.o: %.cpp $(CONFIG_FILES) $(DEPDIR)/%.d | $(DEPDIR)
+%.o: %.cpp $(COMPILE_CONFIG) $(DEPDIR)/%.d | $(DEPDIR)
 	@echo Compiling $<...
 	@$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
-$(CONFIG_FILES): % : %.example
+$(RUNTIME_CONFIG) $(COMPILE_CONFIG): % : %.example
 	@if [ ! -f $@ ]; then \
         echo "Copying $< to $@..."; \
 		cp $< $@; \

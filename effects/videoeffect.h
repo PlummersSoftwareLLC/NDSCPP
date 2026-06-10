@@ -142,7 +142,7 @@ public:
             SWS_BILINEAR, nullptr, nullptr, nullptr);
     }
 
-    void Update(ICanvas& canvas, milliseconds deltaTime) override 
+    void Update(ICanvas& canvas, microseconds deltaTime) override 
     {
         if (!_initialized) 
             return;
