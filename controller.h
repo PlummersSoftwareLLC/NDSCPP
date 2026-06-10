@@ -540,7 +540,7 @@ class Controller : public IController
         lock_guard lock(_canvasMutex);
         for (const auto &canvas : _canvases)
             for (const auto &feature : canvas->Features())
-                if (feature->Id() == id)
+                if (feature->Socket()->Id() == id)
                     return feature->Socket();
         throw out_of_range("Socket not found: " + to_string(id));
     }
