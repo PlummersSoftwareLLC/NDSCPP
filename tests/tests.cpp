@@ -1,6 +1,14 @@
+#include <cpr/api.h>
+#include <ctime>
+#include <future>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <gtest/gtest.h>
-#include <cpr/cpr.h> // Modern C++ HTTP library
 #include <../json.hpp>
+#include <string>
+#include <vector>
+#include <thread>
 
 using json = nlohmann::json;
 using namespace std;

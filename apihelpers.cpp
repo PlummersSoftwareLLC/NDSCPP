@@ -1,6 +1,14 @@
-#include <fstream>
 
 #include "apihelpers.h"
+#include "json.hpp"
+#include "pixeltypes.h"
+#include "effects/misceffects.h"
+#include "effects/paletteeffect.h"
+#include "effects/colorwaveeffect.h"
+#include "effects/starfield.h"
+#include "effects/bouncingballeffect.h"
+#include "effects/fireworkseffect.h"
+#include "effects/videoeffect.h"
 
 namespace ndscpp::api
 {

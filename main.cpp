@@ -14,10 +14,17 @@
 // it to the relevant LED controller via a SocketChannel.  The program will continue
 // to run until it receives a SIGINT signal (Ctrl-C).
 
+#include <chrono>
 #include <csignal>
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <iostream>
 #include <atomic>
-#include <chrono>
+#include <stdexcept>
+#include <string>
+#include <memory>
+#include <shared_mutex>
 #include <thread>
 #include <filesystem>
 #include <optional>
@@ -29,13 +36,11 @@ using namespace chrono;
 #include "crow_all.h"
 #include "global.h"
 #include "canvas.h"
-#include "interfaces.h"
 #include "socketchannel.h"
 #include "ledfeature.h"
 #include "webserver.h"
 #include "dashboardserver.h"
 #include "controller.h"
-#include "schedule.h"
 
 namespace
 {

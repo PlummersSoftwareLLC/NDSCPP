@@ -1,8 +1,8 @@
-#include <curl/curl.h>
+#include <cstdlib>
 #include <chrono>
-#include <thread>
-#include <sstream>
-#include <iomanip>
+#include <ncursesw/ncurses.h>
+#include <exception>
+#include <utility>
 #include <vector>
 #include <string>
 #include <wchar.h>
