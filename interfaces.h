@@ -126,7 +126,7 @@ class IEffectsManager
 public:
     virtual ~IEffectsManager() = default;
     
-    virtual void AddEffect(shared_ptr<ILEDEffect> effect) = 0;
+    virtual void AddEffect(shared_ptr<ILEDEffect> effect, shared_ptr<ISchedule> schedule = nullptr) = 0;
     virtual void RemoveEffect(shared_ptr<ILEDEffect> & effect) = 0;
     virtual void StartCurrentEffect(ICanvas& canvas) = 0;
     virtual void SetCurrentEffect(size_t index, ICanvas& canvas) = 0;

@@ -12,7 +12,7 @@ using namespace std;
 
 class WebServer
 {
-    mutable shared_mutex _apiMutex;
+    mutable recursive_mutex _apiMutex;
     string _controllerFileName;
 
     struct HeaderMiddleware
@@ -27,7 +27,9 @@ class WebServer
 
         void after_handle(crow::request &req, crow::response &res, context &ctx)
         {
-            res.set_header("Content-Type", "application/json");
+            if (req.url.starts_with("/api/"))
+                res.set_header("Content-Type", "application/json");
+
             res.add_header("Access-Control-Allow-Origin", "*");
             res.add_header("Access-Control-Allow-Methods", "GET, OPTIONS, POST, DELETE");
             res.add_header("Access-Control-Allow-Headers", "Content-Type");
@@ -86,7 +88,7 @@ public:
             {
                 try
                 {
-                    shared_lock readLock(_apiMutex);
+                    unique_lock readLock(_apiMutex);
                     return nlohmann::json{{"controller", _controller}}.dump();
                 }
                 catch(const exception& e)
@@ -103,7 +105,7 @@ public:
             {
                 try
                 {
-                    shared_lock readLock(_apiMutex);
+                    unique_lock readLock(_apiMutex);
                     return nlohmann::json{{"sockets", _controller.GetSockets()}}.dump();
                 }
                 catch(const exception& e)
@@ -121,7 +123,7 @@ public:
             {
                 try
                 {
-                    shared_lock readLock(_apiMutex);
+                    unique_lock readLock(_apiMutex);
                     return nlohmann::json{{"socket", _controller.GetSocketById(socketId)}}.dump();
                 }
                 catch(const exception& e)
@@ -138,7 +140,7 @@ public:
             {
                 try
                 {
-                    shared_lock readLock(_apiMutex);
+                    unique_lock readLock(_apiMutex);
                     return nlohmann::json(_controller.Canvases()).dump();
                 }
                 catch(const exception& e)
@@ -155,7 +157,7 @@ public:
             {
                 try
                 {
-                    shared_lock readLock(_apiMutex);
+                    unique_lock readLock(_apiMutex);
                     return nlohmann::json(*_controller.GetCanvasById(id)).dump();
                 }
                 catch(const exception& e)
@@ -213,7 +215,6 @@ public:
                         return {crow::BAD_REQUEST, "Error, likely canvas with that ID already exists."};
 
                     PersistController(req);
-                    writeLock.unlock();
 
                     auto& effectsManager = canvas->Effects();
                     // Start the effects manager of the new canvas if it wants to run and has effects
@@ -241,7 +242,6 @@ public:
                         unique_lock writeLock(_apiMutex);
                         auto newId = _controller.GetCanvasById(canvasId)->AddFeature(feature);
                         PersistController(req);
-                        writeLock.unlock();
 
                         return nlohmann::json{{"id", newId}}.dump();
 
@@ -264,7 +264,6 @@ public:
                         auto canvas = _controller.GetCanvasById(canvasId);
                         canvas->RemoveFeatureById(featureId);
                         PersistController(req);
-                        writeLock.unlock();
 
                         return crow::response(crow::OK);
                     }
@@ -285,7 +284,6 @@ public:
                         unique_lock writeLock(_apiMutex);
                         _controller.DeleteCanvasById(id);
                         PersistController(req);
-                        writeLock.unlock();
 
                         return crow::response(crow::OK);
                     }
@@ -305,6 +303,10 @@ public:
                     auto reqJson = nlohmann::json::parse(req.body);
                     auto effect = reqJson.get<shared_ptr<ILEDEffect>>();
 
+                    shared_ptr<ISchedule> schedule = nullptr;
+                    if (reqJson.contains("schedule"))
+                        schedule = reqJson["schedule"].get<shared_ptr<ISchedule>>();
+
                     unique_lock writeLock(_apiMutex);
                     auto canvas = _controller.GetCanvasById(canvasId);
 
@@ -312,10 +314,9 @@ public:
                     auto& effectsManager = canvas->Effects();
 
                     // Add the new effect
-                    effectsManager.AddEffect(effect);
+                    effectsManager.AddEffect(effect, schedule);
 
                     PersistController(req);
-                    writeLock.unlock();
 
                     return crow::response(crow::OK);
                 }
@@ -325,6 +326,20 @@ public:
                     return crow::response(crow::BAD_REQUEST, string("Error: ") + e.what());
                 }
             });
+
+        CROW_ROUTE(_crowApp, "/")
+        ([](const crow::request&, crow::response& res)
+        {
+            res.set_static_file_info("static/index.html");
+            res.end();
+        });
+
+        CROW_ROUTE(_crowApp, "/<path>")
+        ([](const crow::request&, crow::response& res, string path)
+        {
+            res.set_static_file_info("static/" + path);
+            res.end();
+        });
 
         // Start the server
         _crowApp.port(_controller.GetPort()).multithreaded().run();
