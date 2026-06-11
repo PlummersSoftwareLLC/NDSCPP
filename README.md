@@ -6,13 +6,13 @@ It delivers WiFI packets of color data to ESP32 chips that show that color data 
 
 My house has a long run of 8000 LEDs, like Christmas lights.  Since each ESP32 running NightDriverStrip can only refresh about 1000 LEDs at 30fps, I have broken the run into 8 individual ESP32s, each connected to 1000 LEDs.  They could each run the same effect, but it would be hard to sync, and effects could not span across strips.
 
-NightDriverServer instead composes the drawing on a larger Canvas object, in this case 8000 pixels wide.  Each ESP32 is represented as an LEDFeature object, 1000 pixels wide.  The first is at offset 0 in the canvas, the next at 1000, then 2000, and so on.  
+NightDriverServer instead composes the drawing on a larger Canvas object, in this case 8000 pixels wide.  Each ESP32 is represented as an LEDFeature object, 1000 pixels wide.  The first is at offset 0 in the canvas, the next at 1000, then 2000, and so on.
 
 30 times per second, NDSCPP renders the scene to the 8000-pixel canvas.  Worker threads then split that up into eight separate chunks of 1000 pixels and send each as a packet to the appropriate LED strip, and they all act in concert as one long strip.
 
 Each NightDriverStrip has a socket available on port 49152 to receive frames of color data, normally at up to 60fps.  The strips buffer a few seconds' worth of frames internally and display them perfectly synced by SNTP time, so an effect frame that is supposed to appear all at once across the strips still does so despite delays in Wi-Fi and so on.
 
-It allows you to build a much larger scene from many little ESP32 installs and control it via WiFi.  
+It allows you to build a much larger scene from many little ESP32 installs and control it via WiFi.
 
 Imagine you had a restaurant with 10 tables.  Each table has an LED candle with 16 LEDs.  There are two ways to configure this.  If you want each candle to do the same thing, you would make a Canvas that is 16 pixels long and then place 10 LEDFeatures in it, all at offset 0.
 
@@ -41,7 +41,31 @@ Key concepts for programmers:
 3. **Apply Effects**: Use the `EffectsManager` to apply visual effects to the canvas.
 4. **Transmit Data**: Socket channels handle sending the rendered canvas data to the remote LED controllers.
 
-The project includes a REST API via the `WebServer` class to control and configure canvases dynamically. For detailed interface descriptions and class diagrams, refer to the sections below.
+The project includes a REST API and browser dashboard via the `WebServer` class to control and configure canvases dynamically.
+For detailed interface descriptions and class diagrams, refer to the sections below.
+
+### Runtime Server and Port
+
+At runtime, `ndscpp` starts a single HTTP server, which serves all `/api/...` endpoints and static UI assets. Its default port is `7777`.
+
+### Running `ndscpp`
+
+Default startup:
+
+```shell
+./ndscpp
+```
+
+Useful options:
+
+- `-p <port>`: server port (default `7777`)
+- `-c <configfile>`: controller config file (default `config.led`)
+
+Example:
+
+```shell
+./ndscpp -p 7777 -c config.led
+```
 
 This repository is designed for programmers familiar with modern C++ (C++20 and later) and concepts like interfaces, threading, and network communication. Jump into the code, and start by exploring the interfaces and their implementing classes to understand the system's structure.
 
@@ -88,24 +112,24 @@ After installing prerequisites, the tests can be built using `make -C tests` and
 
 ## Interfaces Overview
 
-### ISocketChannel  
+### ISocketChannel
 
-Defines a communication protocol for managing socket connections and sending data to a server.  
+Defines a communication protocol for managing socket connections and sending data to a server.
 Provides methods for enqueuing frames, retrieving connection status, and tracking performance metrics.
 
 ### ICanvas
 
-Represents a 2D drawing surface that manages LED features and provides rendering capabilities.  
+Represents a 2D drawing surface that manages LED features and provides rendering capabilities.
 Can contain multiple `ILEDFeature` instances, with features mapped to specific regions of the canvas.
 
 ### ILEDGraphics
 
-Provides drawing primitives for 1D and 2D LED features, such as lines, rectangles, gradients, and circles.  
+Provides drawing primitives for 1D and 2D LED features, such as lines, rectangles, gradients, and circles.
 Exposes APIs for pixel manipulation and advanced rendering techniques.
 
-### ILEDEffect  
+### ILEDEffect
 
-Defines lifecycle hooks (`Start` and `Update`) for applying visual effects on LED canvases.  
+Defines lifecycle hooks (`Start` and `Update`) for applying visual effects on LED canvases.
 Encourages modular effect design, allowing dynamic assignment and switching of effects.
 
 ### IEffectManager
@@ -113,48 +137,48 @@ Encourages modular effect design, allowing dynamic assignment and switching of e
 Each canvas has an EffectsManager that does the actual drawing of effects to it, and that EffectsManager
 manages a set of ILEDEffect objects.
 
-### ILEDFeature  
+### ILEDFeature
 
-Represents a 2D collection of LEDs with positioning, rendering, and configuration capabilities.  
+Represents a 2D collection of LEDs with positioning, rendering, and configuration capabilities.
 Provides APIs for interacting with its parent canvas and retrieving its assigned color data.
 
 ## Classes Overview
 
-### SocketChannel  
+### SocketChannel
 
-Implements `ISocketChannel` to manage socket connections and transmit LED frame data.  
-Includes support for data compression and efficient queuing of frames.  
+Implements `ISocketChannel` to manage socket connections and transmit LED frame data.
+Includes support for data compression and efficient queuing of frames.
 Tracks connection state and throughput metrics.
 
-### Canvas  
+### Canvas
 
-Implements `ICanvas` and `ILEDGraphics`, representing a 2D drawing surface with support for multiple LED features.  
-Features advanced rendering capabilities, including drawing primitives, gradients, and solid fills.  
+Implements `ICanvas` and `ILEDGraphics`, representing a 2D drawing surface with support for multiple LED features.
+Features advanced rendering capabilities, including drawing primitives, gradients, and solid fills.
 Serves as the primary interface for rendering effects to assigned LED features.
 
-### LEDFeature  
+### LEDFeature
 
-Implements `ILEDFeature` to represent a logical set of LEDs within a canvas.  
-Handles retrieving pixel data from its assigned region of the parent canvas for transmission over a socket.  
+Implements `ILEDFeature` to represent a logical set of LEDs within a canvas.
+Handles retrieving pixel data from its assigned region of the parent canvas for transmission over a socket.
 Includes attributes such as offset, dimensions, and channel assignment.
 
-### EffectsManager  
+### EffectsManager
 
-Manages a collection of effects and controls the currently active effect.  
-Applies the active effect to an `ICanvas` instance during rendering.  
+Manages a collection of effects and controls the currently active effect.
+Applies the active effect to an `ICanvas` instance during rendering.
 Provides utilities for switching between effects (`NextEffect` and `PreviousEffect`).
 
-### WebServer  
+### WebServer
 
-Hosts a REST API for interacting with and controlling LED canvases and their features.  
+Hosts a REST API for interacting with and controlling LED canvases and their features.
 Supports dynamic management of features, canvases, and effects via HTTP endpoints.
 
-### Utilities  
+### Utilities
 
-Provides static helper functions for byte manipulation, color conversion, and data combination tasks.  
+Provides static helper functions for byte manipulation, color conversion, and data combination tasks.
 Includes compression utilities (using zlib), endian-safe conversions, and drawing utilities for LED data.
 
-### CRGB  
+### CRGB
 
-Represents a 24-bit RGB color, including utility methods for HSV-to-RGB conversion and brightness adjustment.  
+Represents a 24-bit RGB color, including utility methods for HSV-to-RGB conversion and brightness adjustment.
 Forms the base unit of color manipulation across the system.

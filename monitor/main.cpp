@@ -1,12 +1,9 @@
+#include <cstdio>
 #include <curl/curl.h>
-#include <chrono>
-#include <thread>
-#include <sstream>
-#include <iomanip>
-#include <vector>
+#include <exception>
 #include <string>
-#include <unistd.h> // for getopt
 #include <cstdlib>  // for exit
+#include <unistd.h> // for getopt
 #include "monitor.h"
 
 using json = nlohmann::json;
@@ -32,7 +29,7 @@ int main(int argc, char *argv[])
     int port = 7777;                   // default port
     double fps = 10.0;                 // default refresh rate
     int opt;
-    
+
     // Parse command line options
     while ((opt = getopt(argc, argv, "s:p:f:h")) != -1)
     {

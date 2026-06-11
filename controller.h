@@ -21,6 +21,7 @@ using namespace std;
 #include "effects/paletteeffect.h"
 #include "effects/fireworkseffect.h"
 #include <mutex>
+#include <fstream>
 
 class Controller;
 inline void to_json(nlohmann::json &j, const IController &controller);
@@ -36,11 +37,12 @@ class Controller : public IController
 
   public:
 
-    Controller(uint16_t port = 7777) : _port(port)
+    Controller(uint16_t port)
+        : _port(port)
     {
     }
 
-    Controller() : _port(7777) 
+    Controller() : Controller(7777)
     {
     }
 
@@ -50,7 +52,7 @@ class Controller : public IController
         return _canvases;
     }
 
-    static unique_ptr<Controller> CreateFromFile(const string& filePath) 
+    static unique_ptr<Controller> CreateFromFile(const string& filePath)
     {
         // Open the file and parse the JSON
         ifstream file(filePath);
@@ -388,9 +390,9 @@ class Controller : public IController
         lock_guard lock(_canvasMutex);
         logger->debug("Starting canvases...");
 
-        for (auto &canvas : _canvases) 
+        for (auto &canvas : _canvases)
         {
-            if (!respectWantsToRun || canvas->Effects().WantsToRun())    
+            if (!respectWantsToRun || canvas->Effects().WantsToRun())
                 canvas->Effects().Start(*canvas);
         }
     }
@@ -408,9 +410,6 @@ class Controller : public IController
     {
         logger->debug("Adding canvas {}...", ptrCanvas->Name());
 
-        // This is a bit odd; we try get the current canvas with the ID specified by the new one,
-        // and we only proceed in the exception case if the canvas doesn't exist, where we add it
-
         lock_guard lock(_canvasMutex);
         try
         {
@@ -418,12 +417,11 @@ class Controller : public IController
             logger->error("Canvas with ID {} already exists.", ptrCanvas->Id());
             return -1;
         }
-        catch(const out_of_range &)               
+        catch(const out_of_range &)
         {
-            auto newId = Canvas::NextId();
-            ptrCanvas->SetId(newId);
-            _canvases.push_back(ptrCanvas);    
-            return newId;
+            _canvases.push_back(ptrCanvas);
+            Canvas::EnsureNextIdBeyond(ptrCanvas->Id());
+            return ptrCanvas->Id();
         }
     }
 
@@ -431,7 +429,7 @@ class Controller : public IController
     {
         logger->debug("Deleting canvas {}...", id);
 
-        try 
+        try
         {
             lock_guard lock(_canvasMutex);
 
@@ -439,7 +437,7 @@ class Controller : public IController
             canvas->Effects().Stop();
             for (auto &feature : canvas->Features())
                 feature->Socket()->Stop();
-            
+
             // Erase the canvas from _canvases
             _canvases.erase(
                 remove_if(_canvases.begin(), _canvases.end(), [id](const auto &canvas) { return canvas->Id() == id; }),
@@ -447,11 +445,25 @@ class Controller : public IController
 
             return true;
         }
-        catch(const out_of_range& e) 
+        catch(const out_of_range& e)
         {
             logger->error("Canvas with ID {} not found in DeleteCanvasById.", id);
             throw e;
         }
+    }
+
+    void ClearAllCanvases() override
+    {
+        lock_guard lock(_canvasMutex);
+        logger->debug("Clearing all canvases...");
+
+        for (auto &canvas : _canvases)
+        {
+            canvas->Effects().Stop();
+            for (auto &feature : canvas->Features())
+                feature->Socket()->Stop();
+        }
+        _canvases.clear();
     }
 
     bool UpdateCanvas(shared_ptr<ICanvas> ptrCanvas) override
@@ -459,19 +471,31 @@ class Controller : public IController
         logger->debug("Updating canvas {}...", ptrCanvas->Name());
 
         lock_guard lock(_canvasMutex);
-        try 
+        try
         {
             // Find index of canvas we want to update
             auto canvasId = ptrCanvas->Id();
             for (size_t i = 0; i < _canvases.size(); ++i) {
                 if (_canvases[i]->Id() == canvasId) {
+                    auto oldCanvas = _canvases[i];
+                    oldCanvas->Effects().Stop();
+                    for (auto &feature : oldCanvas->Features())
+                        feature->Socket()->Stop();
+
                     _canvases[i] = ptrCanvas;
+
+                    for (auto &feature : ptrCanvas->Features())
+                        feature->Socket()->Start();
+
+                    if (ptrCanvas->Effects().WantsToRun() && ptrCanvas->Effects().EffectCount() > 0)
+                        ptrCanvas->Effects().Start(*ptrCanvas);
+
                     return true;
                 }
             }
             throw out_of_range("Canvas not found");
         }
-        catch(const out_of_range&) 
+        catch(const out_of_range&)
         {
             logger->error("Canvas with ID {} not found in UpdateCanvas.", ptrCanvas->Id());
             return false;
@@ -481,7 +505,7 @@ class Controller : public IController
     // GetCanvasById - Return a reference to the canvas in _canvases with the specified ID.
     //
     // Note that you should already be holding the mutex BEFORE you call this function!
-    
+
     shared_ptr<ICanvas> GetCanvasById(uint16_t id) const override
     {
         for (const auto &canvas : _canvases)
@@ -505,7 +529,7 @@ class Controller : public IController
         lock_guard lock(_canvasMutex);
         for (const auto &canvas : _canvases)
             for (const auto &feature : canvas->Features())
-                if (feature->Id() == id)
+                if (feature->Socket()->Id() == id)
                     return feature->Socket();
         throw out_of_range("Socket not found: " + to_string(id));
     }
@@ -518,6 +542,7 @@ inline void to_json(nlohmann::json &j, const IController &controller)
     try
     {
         j["port"] = controller.GetPort();
+        j["canvases"] = nlohmann::json::array();
         for (const auto &canvas : controller.Canvases())
             j["canvases"].push_back(*canvas);
     }
@@ -529,9 +554,9 @@ inline void to_json(nlohmann::json &j, const IController &controller)
 
 // JSON --> Controller
 
-inline void from_json(const nlohmann::json &j, unique_ptr<Controller> & ptrController) 
+inline void from_json(const nlohmann::json &j, unique_ptr<Controller> & ptrController)
 {
-    try 
+    try
     {
         // Extract port
         uint16_t port = j.at("port").get<uint16_t>();
@@ -540,10 +565,10 @@ inline void from_json(const nlohmann::json &j, unique_ptr<Controller> & ptrContr
         ptrController = make_unique<Controller>(port);
 
         // Extract canvases
-        for (const auto &canvasJson : j.at("canvases"))
+        for (const auto &canvasJson : j.value("canvases", nlohmann::json::array()))
             ptrController->AddCanvas(canvasJson.get<shared_ptr<ICanvas>>());
-    } 
-    catch (const exception &e) 
+    }
+    catch (const exception &e)
     {
         throw runtime_error("Error parsing JSON for Controller: " + string(e.what()));
     }

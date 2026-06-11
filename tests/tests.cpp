@@ -1,6 +1,14 @@
+#include <cpr/api.h>
+#include <ctime>
+#include <future>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <gtest/gtest.h>
-#include <cpr/cpr.h> // Modern C++ HTTP library
 #include <../json.hpp>
+#include <string>
+#include <vector>
+#include <thread>
 
 using json = nlohmann::json;
 using namespace std;
@@ -143,12 +151,12 @@ TEST_F(APITest, CanvasCRUD)
     // Delete the canvas using the new ID
     auto deleteResponse = cpr::Delete(cpr::Url{BASE_URL + "/canvases/" + std::to_string(newId)},
                                       noPersistParam);
-    ASSERT_EQ(deleteResponse.status_code, 200);
+    ASSERT_EQ(deleteResponse.status_code, 204);
 
     // Verify deletion
     auto verifyResponse = cpr::Get(cpr::Url{BASE_URL + "/canvases/" + std::to_string(newId)},
                                    noPersistParam);
-    ASSERT_EQ(verifyResponse.status_code, 400);
+    ASSERT_EQ(verifyResponse.status_code, 404);
 }
 
 // Test Feature operations within a canvas
@@ -197,7 +205,7 @@ TEST_F(APITest, CanvasFeatureOperations)
         jsonHeader, noPersistParam
     );
 
-    ASSERT_EQ(createFeatureResponse.status_code, 200);
+    ASSERT_EQ(createFeatureResponse.status_code, 201);
 
     auto featureInfo = json::parse(createFeatureResponse.text);
     int featureId = featureInfo["id"].get<int>();
@@ -230,7 +238,7 @@ TEST_F(APITest, CanvasFeatureOperations)
     auto deleteFeatureResponse = cpr::Delete(
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(newCanvasId) + "/features/" + std::to_string(featureId)},
         noPersistParam);
-    ASSERT_EQ(deleteFeatureResponse.status_code, 200);
+    ASSERT_EQ(deleteFeatureResponse.status_code, 204);
 
     // Delete the canvas
     auto deleteCanvasResponse = cpr::Delete(cpr::Url{BASE_URL + "/canvases/" + std::to_string(newCanvasId)},
@@ -311,7 +319,7 @@ TEST_F(APITest, MultipleCanvasOperations)
     for (auto &future : deleteFutures)
     {
         auto response = future.get();
-        ASSERT_EQ(response.status_code, 200);
+        ASSERT_EQ(response.status_code, 204);
     }
 }
 
@@ -369,7 +377,7 @@ TEST_F(APITest, MultipleFeatureOperations)
     for (auto &future : featureFutures)
     {
         auto response = future.get();
-        ASSERT_EQ(response.status_code, 200);
+        ASSERT_EQ(response.status_code, 201);
         auto featureJson = json::parse(response.text);
         featureIds.push_back(featureJson["id"].get<int>());
     }
@@ -389,13 +397,13 @@ TEST_F(APITest, MultipleFeatureOperations)
     for (auto &future : deleteFutures)
     {
         auto response = future.get();
-        ASSERT_EQ(response.status_code, 200);
+        ASSERT_EQ(response.status_code, 204);
     }
 
     // Cleanup canvas
     auto deleteCanvasResponse = cpr::Delete(cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
                                             noPersistParam);
-    ASSERT_EQ(deleteCanvasResponse.status_code, 200);
+    ASSERT_EQ(deleteCanvasResponse.status_code, 204);
 }
 
 // Test rapid creation/deletion cycles
@@ -445,7 +453,7 @@ TEST_F(APITest, RapidCreationDeletion)
                 cpr::Url{BASE_URL + "/canvases/" + std::to_string(cycleCanvasIds.back()) + "/features"},
                 cpr::Body{featureData.dump()},
                 jsonHeader, noPersistParam);
-            ASSERT_EQ(featureResponse.status_code, 200);
+            ASSERT_EQ(featureResponse.status_code, 201);
         }
 
         // Delete all canvases in this cycle
@@ -455,7 +463,7 @@ TEST_F(APITest, RapidCreationDeletion)
 
             auto response = cpr::Delete(cpr::Url{BASE_URL + "/canvases/" + std::to_string(id)},
                                         noPersistParam);
-            ASSERT_EQ(response.status_code, 200);
+            ASSERT_EQ(response.status_code, 204);
         }
     }
 }
@@ -499,7 +507,7 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
         cpr::Body{featureData.dump()},
         jsonHeader, noPersistParam
     );
-    ASSERT_EQ(createFeatureResponse.status_code, 200);
+    ASSERT_EQ(createFeatureResponse.status_code, 201);
     auto featureJson = json::parse(createFeatureResponse.text);
     int featureId = featureJson["id"].get<int>();
 
@@ -524,7 +532,7 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
         cpr::Body{effect1Data.dump()},
         jsonHeader, noPersistParam
     );
-    ASSERT_EQ(createEffect1Response.status_code, 200);
+    ASSERT_EQ(createEffect1Response.status_code, 201);
 
     // Create second effect
     json effect2Data = {
@@ -542,7 +550,7 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
         cpr::Body{effect2Data.dump()},
         jsonHeader, noPersistParam
     );
-    ASSERT_EQ(createEffect2Response.status_code, 200);
+    ASSERT_EQ(createEffect2Response.status_code, 201);
 
     // Get the canvas to verify effects
     auto getCanvasResponse = cpr::Get(
@@ -590,11 +598,253 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/features/" + std::to_string(featureId)},
         noPersistParam
     );
-    ASSERT_EQ(deleteFeatureResponse.status_code, 200);
+    ASSERT_EQ(deleteFeatureResponse.status_code, 204);
 
     auto deleteCanvasResponse = cpr::Delete(
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
         noPersistParam
     );
-    ASSERT_EQ(deleteCanvasResponse.status_code, 200);
+    ASSERT_EQ(deleteCanvasResponse.status_code, 204);
+}
+
+TEST_F(APITest, CanvasUpdatePreservesFeatures)
+{
+    json canvasData = {
+        {"id", -1},
+        {"name", "Editable Canvas " + std::to_string(std::time(nullptr))},
+        {"width", 64},
+        {"height", 8}
+    };
+
+    auto createCanvasResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases"},
+        cpr::Body{canvasData.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(createCanvasResponse.status_code, 201);
+    const int canvasId = json::parse(createCanvasResponse.text)["id"].get<int>();
+
+    json featureData = {
+        {"hostName", "update-test-host"},
+        {"friendlyName", "Editable Feature"},
+        {"port", 1234},
+        {"width", 32},
+        {"height", 4},
+        {"offsetX", 10},
+        {"offsetY", 2},
+        {"reversed", false},
+        {"channel", 1},
+        {"redGreenSwap", false},
+        {"clientBufferCount", 16}
+    };
+
+    auto createFeatureResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/features"},
+        cpr::Body{featureData.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(createFeatureResponse.status_code, 201);
+    const int featureId = json::parse(createFeatureResponse.text)["id"].get<int>();
+
+    auto getCanvasResponse = cpr::Get(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        noPersistParam
+    );
+    ASSERT_EQ(getCanvasResponse.status_code, 200);
+
+    auto canvasJson = json::parse(getCanvasResponse.text);
+    canvasJson["name"] = "Updated Canvas";
+    canvasJson["width"] = 96;
+    canvasJson["height"] = 12;
+    canvasJson["effectsManager"]["fps"] = 48;
+    canvasJson["effectsManager"]["running"] = false;
+
+    auto updateResponse = cpr::Put(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        cpr::Body{canvasJson.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(updateResponse.status_code, 200);
+
+    auto updatedCanvas = json::parse(updateResponse.text);
+    ASSERT_EQ(updatedCanvas["name"], "Updated Canvas");
+    ASSERT_EQ(updatedCanvas["width"], 96);
+    ASSERT_EQ(updatedCanvas["height"], 12);
+    ASSERT_EQ(updatedCanvas["effectsManager"]["fps"], 48);
+    ASSERT_EQ(updatedCanvas["features"].size(), static_cast<size_t>(1));
+    ASSERT_EQ(updatedCanvas["features"][0]["id"], featureId);
+    ASSERT_EQ(updatedCanvas["features"][0]["friendlyName"], "Editable Feature");
+
+    auto deleteCanvasResponse = cpr::Delete(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        noPersistParam
+    );
+    ASSERT_EQ(deleteCanvasResponse.status_code, 204);
+}
+
+TEST_F(APITest, EffectCatalogExposesDefinitions)
+{
+    auto response = cpr::Get(
+        cpr::Url{BASE_URL + "/effects/catalog"},
+        noPersistParam
+    );
+
+    ASSERT_EQ(response.status_code, 200);
+    auto catalogJson = json::parse(response.text);
+    ASSERT_TRUE(catalogJson.contains("effects"));
+    ASSERT_FALSE(catalogJson["effects"].empty());
+
+    bool foundSolidColorFill = false;
+    bool foundPaletteEditorField = false;
+
+    for (const auto &effect : catalogJson["effects"])
+    {
+        if (effect["label"] == "Solid Color Fill")
+            foundSolidColorFill = true;
+
+        if (effect["label"] == "Palette Scroll")
+        {
+            for (const auto &field : effect["fields"])
+            {
+                if (field["path"] == "palette.colors")
+                    foundPaletteEditorField = true;
+            }
+        }
+    }
+
+    ASSERT_TRUE(foundSolidColorFill);
+    ASSERT_TRUE(foundPaletteEditorField);
+}
+
+TEST_F(APITest, CanvasPixelsEndpointReturnsBinaryFrame)
+{
+    json canvasData = {
+        {"id", -1},
+        {"name", "Pixels Test Canvas " + std::to_string(std::time(nullptr))},
+        {"width", 12},
+        {"height", 5}
+    };
+
+    auto createCanvasResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases"},
+        cpr::Body{canvasData.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(createCanvasResponse.status_code, 201);
+    const int canvasId = json::parse(createCanvasResponse.text)["id"].get<int>();
+
+    auto pixelsResponse = cpr::Get(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/pixels"},
+        noPersistParam
+    );
+    ASSERT_EQ(pixelsResponse.status_code, 200);
+
+    const auto &body = pixelsResponse.text;
+    ASSERT_GE(body.size(), static_cast<size_t>(6));
+
+    const auto readU16LE = [&body](size_t offset) -> uint16_t
+    {
+        const auto lo = static_cast<uint8_t>(body[offset]);
+        const auto hi = static_cast<uint8_t>(body[offset + 1]);
+        return static_cast<uint16_t>((hi << 8) | lo);
+    };
+
+    const uint16_t width = readU16LE(0);
+    const uint16_t height = readU16LE(2);
+    const uint16_t fps = readU16LE(4);
+
+    ASSERT_EQ(width, 12);
+    ASSERT_EQ(height, 5);
+    ASSERT_GT(fps, 0);
+
+    const size_t expectedSize = 6 + static_cast<size_t>(width) * height * 3;
+    ASSERT_EQ(body.size(), expectedSize);
+
+    auto deleteCanvasResponse = cpr::Delete(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        noPersistParam
+    );
+    ASSERT_EQ(deleteCanvasResponse.status_code, 204);
+}
+
+TEST_F(APITest, CanvasRuntimeControlEndpointsSupportWebUiFlow)
+{
+    json canvasData = {
+        {"id", -1},
+        {"name", "Runtime Test Canvas " + std::to_string(std::time(nullptr))},
+        {"width", 16},
+        {"height", 8}
+    };
+
+    auto createCanvasResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases"},
+        cpr::Body{canvasData.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(createCanvasResponse.status_code, 201);
+    const int canvasId = json::parse(createCanvasResponse.text)["id"].get<int>();
+
+    json effectOne = {
+        {"type", "SolidColorFill"},
+        {"name", "Runtime Effect 1"},
+        {"color", {{"red", 255}, {"green", 0}, {"blue", 0}}}
+    };
+
+    json effectTwo = {
+        {"type", "SolidColorFill"},
+        {"name", "Runtime Effect 2"},
+        {"color", {{"red", 0}, {"green", 255}, {"blue", 0}}}
+    };
+
+    auto addEffectOneResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/effects"},
+        cpr::Body{effectOne.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(addEffectOneResponse.status_code, 201);
+
+    auto addEffectTwoResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/effects"},
+        cpr::Body{effectTwo.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(addEffectTwoResponse.status_code, 201);
+
+    auto stopResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases/stop"},
+        cpr::Body{json{{"canvasIds", json::array({canvasId})}}.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(stopResponse.status_code, 200);
+
+    auto startResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases/start"},
+        cpr::Body{json{{"canvasIds", json::array({canvasId})}}.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(startResponse.status_code, 200);
+
+    auto setCurrentEffectResponse = cpr::Post(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/currentEffect"},
+        cpr::Body{json{{"effectIndex", 1}}.dump()},
+        jsonHeader, noPersistParam
+    );
+    ASSERT_EQ(setCurrentEffectResponse.status_code, 200);
+
+    auto getCanvasResponse = cpr::Get(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        noPersistParam
+    );
+    ASSERT_EQ(getCanvasResponse.status_code, 200);
+
+    const auto canvasJson = json::parse(getCanvasResponse.text);
+    ASSERT_TRUE(canvasJson.contains("effectsManager"));
+    ASSERT_TRUE(canvasJson["effectsManager"].contains("currentEffectIndex"));
+    ASSERT_EQ(canvasJson["effectsManager"]["currentEffectIndex"].get<int>(), 1);
+
+    auto deleteCanvasResponse = cpr::Delete(
+        cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
+        noPersistParam
+    );
+    ASSERT_EQ(deleteCanvasResponse.status_code, 204);
 }
