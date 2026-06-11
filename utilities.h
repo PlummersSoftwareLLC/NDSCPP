@@ -57,19 +57,27 @@ public:
         // This code makes all kinds of assumptions that CRGB is three RGB bytes, so let's assert that fact
         static_assert(sizeof(CRGB) == 3);
 
-        size_t index = 0;
+        if (!reversed && !redGreenSwap)
+        {
+            memcpy(byteArray.data(), pixels.data(), pixels.size() * 3);
+            return byteArray;
+        }
 
+        size_t index = 0;
         if (reversed)
         {
-            for (auto it = pixels.rbegin(); it != pixels.rend(); ++it)
+            if (redGreenSwap)
             {
-                if (redGreenSwap)
+                for (auto it = pixels.rbegin(); it != pixels.rend(); ++it)
                 {
                     byteArray[index++] = it->g;
                     byteArray[index++] = it->r;
                     byteArray[index++] = it->b;
                 }
-                else
+            }
+            else
+            {
+                for (auto it = pixels.rbegin(); it != pixels.rend(); ++it)
                 {
                     byteArray[index++] = it->r;
                     byteArray[index++] = it->g;
@@ -79,15 +87,20 @@ public:
         }
         else
         {
-            for (const auto &pixel : pixels)
+            if (redGreenSwap)
             {
-                if (redGreenSwap)
+                for (const auto &pixel : pixels)
                 {
                     byteArray[index++] = pixel.g;
                     byteArray[index++] = pixel.r;
                     byteArray[index++] = pixel.b;
                 }
-                else
+            }
+            else
+            {
+                // This case is actually covered by the memcpy above, but kept for completeness
+                // or if memcpy is somehow not preferred.
+                for (const auto &pixel : pixels)
                 {
                     byteArray[index++] = pixel.r;
                     byteArray[index++] = pixel.g;

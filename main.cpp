@@ -46,7 +46,7 @@ shared_ptr<spdlog::logger> logger = spdlog::stdout_color_mt("console");
 
 int main(int argc, char *argv[])
 {
-    logger->set_level(spdlog::level::info);
+    logger->set_level(spdlog::level::debug);
 
     uint16_t port = 7777;
     string   filename = "config.led";
