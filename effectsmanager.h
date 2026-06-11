@@ -67,12 +67,16 @@ public:
     }
 
     // Add an effect to the manager
-    void AddEffect(shared_ptr<ILEDEffect> effect) override
+    void AddEffect(shared_ptr<ILEDEffect> effect, shared_ptr<ISchedule> schedule = nullptr) override
     {
         lock_guard lock(_effectsMutex);
 
         if (!effect)
             throw invalid_argument("Cannot add a null effect.");
+        
+        if (schedule)
+            effect->SetSchedule(schedule);
+
         _effects.push_back(effect);
 
         // Automatically set the first effect as current if none is selected
