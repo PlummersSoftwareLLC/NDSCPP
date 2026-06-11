@@ -61,7 +61,9 @@ class Controller : public IController
         nlohmann::json jsonData;
         file >> jsonData;
 
-        return jsonData.get<unique_ptr<Controller>>();
+        unique_ptr<Controller> ptr;
+        from_json(jsonData, ptr);
+        return ptr;
     }
 
     void WriteToFile(const string& filePath) const override
@@ -534,13 +536,13 @@ inline void from_json(const nlohmann::json &j, unique_ptr<Controller> & ptrContr
     try 
     {
         // Extract port
-        uint16_t port = j.at("port").get<uint16_t>();
+        uint16_t port = j.value("port", uint16_t(7777));
 
         // Create controller
         ptrController = make_unique<Controller>(port);
 
-        // Extract canvases
-        for (const auto &canvasJson : j.at("canvases"))
+        // Extract canvases (optional)
+        for (const auto &canvasJson : j.value("canvases", nlohmann::json::array()))
             ptrController->AddCanvas(canvasJson.get<shared_ptr<ICanvas>>());
     } 
     catch (const exception &e) 

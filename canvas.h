@@ -21,7 +21,7 @@ class Canvas : public ICanvas
     EffectsManager          _effects;
     string                  _name;
     vector<shared_ptr<ILEDFeature>> _features;
-    mutable mutex           _featuresMutex;
+    mutable recursive_mutex _featuresMutex;
 
 public:
     Canvas(string name, uint32_t width, uint32_t height, uint16_t fps = 30) : 
@@ -147,20 +147,24 @@ inline void to_json(nlohmann::json& j, const shared_ptr<ICanvas>& canvasPtr)
 
 // ICanvas <-- JSON
 
-inline void from_json(const nlohmann::json& j, shared_ptr<ICanvas> & canvas) 
+inline void from_json(const nlohmann::json &j, shared_ptr<ICanvas> & canvas) 
 {
     // Create canvas with required fields.
     canvas = make_shared<Canvas>(
         j.at("name").get<string>(),
         j.at("width").get<uint32_t>(),
-        j.at("height").get<uint32_t>()
+        j.value("height", uint32_t(1))
     );
+
+    // Optional id if provided manually
+    if (j.contains("id"))
+        canvas->SetId(j.at("id").get<uint32_t>());
 
     // Features()
     for (const auto& featureJson : j.value("features", nlohmann::json::array()))
         canvas->AddFeature(featureJson.get<shared_ptr<ILEDFeature>>());
 
-    // Validate and deserialize EffectsManager
+    // Optional EffectsManager
     if (j.contains("effectsManager")) 
         from_json(j.at("effectsManager"), canvas->Effects());
 }
