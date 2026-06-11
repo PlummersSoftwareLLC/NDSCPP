@@ -1,7 +1,7 @@
 #pragma once
 
 // Interfaces
-// 
+//
 // This file contains the interfaces for the various classes in the project.  The interfaces
 // are used to define the methods that must be implemented by the classes that use them.  This
 // allows the classes to be decoupled from each other, and allows for easier testing and
@@ -18,12 +18,12 @@
 using namespace std;
 using namespace chrono;
 
-// ILEDGraphics 
+// ILEDGraphics
 //
 // Represents a 2D drawing surface that can be used to render pixel data.  Provides methods for
 // setting and getting pixel values, drawing shapes, and clearing the surface.
 
-class ILEDGraphics 
+class ILEDGraphics
 {
 public:
     virtual ~ILEDGraphics() = default;
@@ -48,13 +48,13 @@ public:
 //
 // Represents a class that determine whether the effect involved can/should be run at the current time
 
-class ISchedule 
+class ISchedule
 {
 public:
 
     // Days of week as a bitmask using powers of 2.
 
-    enum DayOfWeek : uint8_t 
+    enum DayOfWeek : uint8_t
     {
         Sunday    = 0x01,  // 1
         Monday    = 0x02,  // 2
@@ -96,7 +96,7 @@ class ICanvas;
 
 // ILEDEffect
 //
-// Defines lifecycle hooks (`Start` and `Update`) for applying visual effects on LED canvases.  
+// Defines lifecycle hooks (`Start` and `Update`) for applying visual effects on LED canvases.
 
 class ILEDEffect
 {
@@ -125,7 +125,7 @@ class IEffectsManager
 {
 public:
     virtual ~IEffectsManager() = default;
-    
+
     virtual void AddEffect(shared_ptr<ILEDEffect> effect) = 0;
     virtual void RemoveEffect(shared_ptr<ILEDEffect> & effect) = 0;
     virtual void StartCurrentEffect(ICanvas& canvas) = 0;
@@ -146,12 +146,12 @@ public:
     virtual void SetFPS(uint16_t fps) = 0;
     virtual uint16_t GetFPS() const = 0;
     virtual void SetEffects(vector<shared_ptr<ILEDEffect>> effects) = 0;
-    virtual void SetCurrentEffectIndex(int index) = 0;    
+    virtual void SetCurrentEffectIndex(int index) = 0;
 };
 
 // ISocketChannel
 //
-// Defines a communication protocol for managing socket connections and sending data to a server.  
+// Defines a communication protocol for managing socket connections and sending data to a server.
 // Provides methods for enqueuing frames, retrieving connection status, and tracking performance metrics.
 
 class ISocketChannel
@@ -185,10 +185,10 @@ public:
 
 // ILEDFeature
 //
-// Represents a 2D collection of LEDs with positioning, rendering, and configuration capabilities.  
+// Represents a 2D collection of LEDs with positioning, rendering, and configuration capabilities.
 // Provides APIs for interacting with its parent canvas and retrieving its assigned color data.
 
-class ILEDFeature 
+class ILEDFeature
 {
 public:
     virtual ~ILEDFeature() = default;
@@ -212,7 +212,7 @@ public:
 
     // Data retrieval
     virtual vector<uint8_t> GetPixelData() const = 0;
-    virtual vector<uint8_t> GetDataFrame() const = 0;    
+    virtual vector<uint8_t> GetDataFrame() const = 0;
 
     virtual shared_ptr<ISocketChannel> Socket() = 0;
     virtual const shared_ptr<ISocketChannel> Socket() const = 0;
@@ -221,14 +221,14 @@ public:
 
 // ICanvas
 //
-// Represents a 2D drawing surface that manages LED features and provides rendering capabilities.  
+// Represents a 2D drawing surface that manages LED features and provides rendering capabilities.
 // Can contain multiple `ILEDFeature` instances, with features mapped to specific regions of the canvas
 
-class ICanvas 
+class ICanvas
 {
 public:
     virtual ~ICanvas() = default;
-    
+
     virtual uint32_t Id() const = 0;
     virtual uint32_t SetId(uint32_t id) = 0;
     virtual string Name() const = 0;
@@ -260,8 +260,6 @@ public:
 
     virtual uint16_t GetPort() const = 0;
     virtual void     SetPort(uint16_t port) = 0;
-    virtual uint16_t GetWebUIPort() const = 0;
-    virtual void     SetWebUIPort(uint16_t port) = 0;
 
     virtual vector<shared_ptr<ICanvas>> Canvases() const = 0;
     virtual uint32_t AddCanvas(shared_ptr<ICanvas> ptrCanvas) = 0;

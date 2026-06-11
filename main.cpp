@@ -39,7 +39,6 @@ using namespace chrono;
 #include "socketchannel.h"
 #include "ledfeature.h"
 #include "webserver.h"
-#include "dashboardserver.h"
 #include "controller.h"
 
 namespace
@@ -75,7 +74,6 @@ int main(int argc, char *argv[])
     logger->set_level(spdlog::level::info);
 
     optional<uint16_t> apiPortOverride;
-    optional<uint16_t> webUiPortOverride;
     string filename = "config.led";
 
     // Parse command-line options
@@ -84,12 +82,11 @@ int main(int argc, char *argv[])
     {
         {"port", required_argument, nullptr, 'p'},
         {"config", required_argument, nullptr, 'c'},
-        {"webuiport", required_argument, nullptr, 'w'},
         {"help", no_argument, nullptr, 'h'},
         {nullptr, 0, nullptr, 0}
     };
 
-    while ((opt = getopt_long(argc, argv, "p:c:w:h", longOptions, nullptr)) != -1)
+    while ((opt = getopt_long(argc, argv, "p:c:h", longOptions, nullptr)) != -1)
     {
         switch (opt)
         {
@@ -99,14 +96,11 @@ int main(int argc, char *argv[])
             case 'c':
                 filename = optarg;
                 break;
-            case 'w':
-                webUiPortOverride = ParsePortOption(optarg, "Web UI port");
-                break;
             case 'h':
-                cerr << "Usage: " << argv[0] << " [-p <port>] [-w <webuiport>] [-c <configfile>]" << endl;
+                cerr << "Usage: " << argv[0] << " [-p <port>] [-c <configfile>]" << endl;
                 return EXIT_SUCCESS;
             default:
-                cerr << "Usage: " << argv[0] << " [-p <port>] [-w <webuiport>] [-c <configfile>]" << endl;
+                cerr << "Usage: " << argv[0] << " [-p <port>] [-c <configfile>]" << endl;
                 return EXIT_FAILURE;
         }
     }
@@ -117,7 +111,7 @@ int main(int argc, char *argv[])
     #define USE_DEMO_DATA 0
 
     #if USE_DEMO_DATA
-        unique_ptr<Controller> ptrController = make_unique<Controller>(7777, 9997);
+        unique_ptr<Controller> ptrController = make_unique<Controller>(7777);
         ptrController->LoadSampleCanvases();
     #else
         unique_ptr<Controller> ptrController = Controller::CreateFromFile(filename);
@@ -125,14 +119,6 @@ int main(int argc, char *argv[])
 
     if (apiPortOverride)
         ptrController->SetPort(*apiPortOverride);
-    if (webUiPortOverride)
-        ptrController->SetWebUIPort(*webUiPortOverride);
-
-    if (ptrController->GetPort() == ptrController->GetWebUIPort())
-    {
-        logger->error("API port {} and web UI port {} cannot be the same", ptrController->GetPort(), ptrController->GetWebUIPort());
-        return EXIT_FAILURE;
-    }
 
     signal(SIGINT, HandleSignal);
     signal(SIGTERM, HandleSignal);
@@ -145,38 +131,31 @@ int main(int argc, char *argv[])
 
     crow::logger::setLogLevel(crow::LogLevel::WARNING);
     shared_mutex apiMutex;
-    WebServer apiServer(*ptrController.get(), filename, apiMutex);
-    DashboardServer dashboardServer(*ptrController.get(), filename, apiMutex, assetRoot);
+    WebServer server(*ptrController.get(), filename, apiMutex, assetRoot);
 
     try
     {
-        apiServer.StartAsync();
-        dashboardServer.StartAsync();
+        server.StartAsync();
     }
     catch (const exception &e)
     {
-        logger->error("Failed to start servers: {}", e.what());
-        dashboardServer.Stop();
-        apiServer.Stop();
-        dashboardServer.Wait();
-        apiServer.Wait();
+        logger->error("Failed to start server: {}", e.what());
+        server.Stop();
+        server.Wait();
         ptrController->Stop();
         ptrController->Disconnect();
         return EXIT_FAILURE;
     }
 
-    logger->info("API listening on http://localhost:{}/api", ptrController->GetPort());
-    logger->info("Dashboard listening on http://localhost:{}/", ptrController->GetWebUIPort());
+    logger->info("Server listening on http://localhost:{}/", ptrController->GetPort());
 
     while (!gShouldExit)
         this_thread::sleep_for(100ms);
 
     cout << "Shutting down..." << endl;
 
-    dashboardServer.Stop();
-    apiServer.Stop();
-    dashboardServer.Wait();
-    apiServer.Wait();
+    server.Stop();
+    server.Wait();
 
     // Shut down rendering and communications
     ptrController->Stop();

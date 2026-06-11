@@ -766,6 +766,12 @@ function resolveApiUrl(url) {
     return url;
   }
 
+  // If API is on the same port, use current location
+  if (window.NDSCPP_API_SAME_PORT) {
+    return url;
+  }
+
+  // Fall back to separate port if configured
   const apiPort = Number(window.NDSCPP_API_PORT || 7777);
   return `${window.location.protocol}//${window.location.hostname}:${apiPort}${url}`;
 }

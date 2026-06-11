@@ -5,6 +5,9 @@
 #include <utility>
 #include <array>
 #include <type_traits>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include "json.hpp"
 #include "crow_all.h"
 #include "apihelpers.h"
@@ -36,8 +39,95 @@ class WebServer
 
     shared_mutex & _apiMutex;
     string _controllerFileName;
+    filesystem::path _assetRoot;
     future<void> _serverFuture;
     bool _routesRegistered = false;
+
+    static string ContentTypeFor(const filesystem::path &path)
+    {
+        const auto extension = path.extension().string();
+
+        if (extension == ".html")
+            return "text/html; charset=utf-8";
+        if (extension == ".css")
+            return "text/css; charset=utf-8";
+        if (extension == ".js")
+            return "application/javascript; charset=utf-8";
+        if (extension == ".json")
+            return "application/json; charset=utf-8";
+
+        return "text/plain; charset=utf-8";
+    }
+
+    crow::response ServeAsset(const filesystem::path &path) const
+    {
+        ifstream file(path, ios::binary);
+        if (!file.is_open())
+        {
+            logger->error("Unable to open dashboard asset: {}", path.string());
+            return crow::response(crow::NOT_FOUND);
+        }
+
+        ostringstream buffer;
+        buffer << file.rdbuf();
+
+        crow::response response(crow::OK);
+        response.set_header("Content-Type", ContentTypeFor(path));
+        response.set_header("Cache-Control", "no-store");
+        response.write(buffer.str());
+        return response;
+    }
+
+    crow::response ServeAssetRequest(const string& requestPath) const
+    {
+        if (_assetRoot.empty())
+            return crow::response(crow::NOT_FOUND);
+
+        filesystem::path relativePath = filesystem::path(requestPath).lexically_normal();
+        if (relativePath.empty() || relativePath == ".")
+            relativePath = "index.html";
+
+        if (relativePath.is_absolute())
+            return crow::response(crow::NOT_FOUND);
+
+        const string relative = relativePath.generic_string();
+        if (relative == ".." ||
+            relative.rfind("../", 0) == 0 ||
+            relative.find("/../") != string::npos)
+        {
+            return crow::response(crow::NOT_FOUND);
+        }
+
+        const filesystem::path rootPath = _assetRoot.lexically_normal();
+        const filesystem::path fullPath = (rootPath / relativePath).lexically_normal();
+
+        const string root = rootPath.generic_string();
+        const string full = fullPath.generic_string();
+        const bool insideRoot =
+            full == root ||
+            (full.size() > root.size() &&
+             full.compare(0, root.size(), root) == 0 &&
+             full[root.size()] == '/');
+
+        if (!insideRoot)
+            return crow::response(crow::NOT_FOUND);
+
+        if (!filesystem::exists(fullPath) || !filesystem::is_regular_file(fullPath))
+            return crow::response(crow::NOT_FOUND);
+
+        return ServeAsset(fullPath);
+    }
+
+    crow::response ServeAppConfig() const
+    {
+        shared_lock readLock(_apiMutex);
+
+        crow::response response(crow::OK);
+        response.set_header("Content-Type", "application/javascript; charset=utf-8");
+        response.set_header("Cache-Control", "no-store");
+        response.write("window.NDSCPP_API_SAME_PORT = true;\n");
+        return response;
+    }
 
     struct HeaderMiddleware
     {
@@ -154,9 +244,10 @@ class WebServer
     }
 
 public:
-    WebServer(IController & controller, string controllerFileName, shared_mutex &apiMutex)
+    WebServer(IController & controller, string controllerFileName, shared_mutex &apiMutex, filesystem::path assetRoot = {})
         : _apiMutex(apiMutex),
           _controllerFileName(std::move(controllerFileName)),
+          _assetRoot(std::move(assetRoot)),
           _controller(controller)
     {
     }
@@ -411,6 +502,34 @@ public:
                     return response;
                 });
             });
+
+        // Web UI asset routes (everything outside /api/*)
+        CROW_ROUTE(_crowApp, "/").methods(crow::HTTPMethod::GET)([&]()
+        {
+            return ServeAssetRequest("");
+        });
+
+        CROW_ROUTE(_crowApp, "/<path>").methods(crow::HTTPMethod::GET)([&](const string& path)
+        {
+            if (path == "app-config.js")
+                return ServeAppConfig();
+
+            if (path == "api" || path.rfind("api/", 0) == 0)
+                return crow::response(crow::NOT_FOUND);
+
+            auto response = ServeAssetRequest(path);
+
+            // SPA fallback: unknown client routes (no extension) should load index.html.
+            if (response.code == crow::NOT_FOUND)
+            {
+                const auto lastSlash = path.find_last_of('/');
+                const string leaf = (lastSlash == string::npos) ? path : path.substr(lastSlash + 1);
+                if (leaf.find('.') == string::npos)
+                    return ServeAssetRequest("");
+            }
+
+            return response;
+        });
 
         // Start the server
         _crowApp.signal_clear();
