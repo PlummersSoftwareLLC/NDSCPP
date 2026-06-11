@@ -542,6 +542,5 @@
         "width": 32
       }
     ],
-    "port": 7777,
-    "webuiport": 9997
+    "port": 7777
 }

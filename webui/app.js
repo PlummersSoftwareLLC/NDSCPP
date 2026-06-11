@@ -115,7 +115,6 @@ function bindElements() {
   elements.connectionStatus = document.getElementById("connectionStatus");
   elements.connectionStatusText = document.getElementById("connectionStatusText");
   elements.apiPortValue = document.getElementById("apiPortValue");
-  elements.webPortValue = document.getElementById("webPortValue");
 
   elements.tableMetaText = document.getElementById("tableMetaText");
   elements.canvasTableBody = document.getElementById("canvasTableBody");
@@ -836,7 +835,6 @@ function render() {
 function renderConnectionStatus() {
   const controller = state.controller || {};
   elements.apiPortValue.textContent = controller.port ?? "--";
-  elements.webPortValue.textContent = controller.webuiport ?? "--";
   elements.connectionStatus.classList.toggle("online", state.connected);
   elements.connectionStatus.classList.toggle("offline", !state.connected);
   elements.connectionStatusText.textContent = state.connected

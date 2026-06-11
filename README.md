@@ -41,18 +41,12 @@ Key concepts for programmers:
 3. **Apply Effects**: Use the `EffectsManager` to apply visual effects to the canvas.
 4. **Transmit Data**: Socket channels handle sending the rendered canvas data to the remote LED controllers.
 
-The project includes a REST API via the `WebServer` class to control and configure canvases dynamically.
-It also includes a browser dashboard served by `DashboardServer` from the `webui` folder.
+The project includes a REST API and browser dashboard via the `WebServer` class to control and configure canvases dynamically.
 For detailed interface descriptions and class diagrams, refer to the sections below.
 
-### Runtime Servers and Ports
+### Runtime Server and Port
 
-At runtime, `ndscpp` starts two HTTP servers:
-
-- **API server (`WebServer`)**: serves all `/api/...` endpoints (default port `7777`)
-- **Dashboard server (`DashboardServer`)**: serves static UI assets (`/`, `/index.html`, `/styles.css`, `/app.js`) and runtime config (`/app-config.js`) (default port `9997`)
-
-The dashboard JavaScript calls the API server directly using the configured API port from `/app-config.js`.
+At runtime, `ndscpp` starts a single HTTP server, which serves all `/api/...` endpoints and static UI assets. Its default port is `7777`.
 
 ### Running `ndscpp`
 
@@ -64,17 +58,14 @@ Default startup:
 
 Useful options:
 
-- `-p <port>`: API port (default `7777`)
-- `-w <webuiport>`: dashboard/UI port (default `9997`)
+- `-p <port>`: server port (default `7777`)
 - `-c <configfile>`: controller config file (default `config.led`)
 
 Example:
 
 ```shell
-./ndscpp -p 7777 -w 9997 -c config.led
+./ndscpp -p 7777 -c config.led
 ```
-
-Note: API and Web UI ports must be different.
 
 This repository is designed for programmers familiar with modern C++ (C++20 and later) and concepts like interfaces, threading, and network communication. Jump into the code, and start by exploring the interfaces and their implementing classes to understand the system's structure.
 
@@ -181,11 +172,6 @@ Provides utilities for switching between effects (`NextEffect` and `PreviousEffe
 
 Hosts a REST API for interacting with and controlling LED canvases and their features.
 Supports dynamic management of features, canvases, and effects via HTTP endpoints.
-
-### DashboardServer
-
-Hosts the browser dashboard UI and serves static files from `webui/`.
-Provides `/app-config.js`, which exposes runtime API port settings consumed by the UI.
 
 ### Utilities
 
