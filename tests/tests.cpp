@@ -151,12 +151,12 @@ TEST_F(APITest, CanvasCRUD)
     // Delete the canvas using the new ID
     auto deleteResponse = cpr::Delete(cpr::Url{BASE_URL + "/canvases/" + std::to_string(newId)},
                                       noPersistParam);
-    ASSERT_EQ(deleteResponse.status_code, 200);
+    ASSERT_EQ(deleteResponse.status_code, 204);
 
     // Verify deletion
     auto verifyResponse = cpr::Get(cpr::Url{BASE_URL + "/canvases/" + std::to_string(newId)},
                                    noPersistParam);
-    ASSERT_EQ(verifyResponse.status_code, 400);
+    ASSERT_EQ(verifyResponse.status_code, 404);
 }
 
 // Test Feature operations within a canvas
@@ -205,7 +205,7 @@ TEST_F(APITest, CanvasFeatureOperations)
         jsonHeader, noPersistParam
     );
 
-    ASSERT_EQ(createFeatureResponse.status_code, 200);
+    ASSERT_EQ(createFeatureResponse.status_code, 201);
 
     auto featureInfo = json::parse(createFeatureResponse.text);
     int featureId = featureInfo["id"].get<int>();
@@ -238,7 +238,7 @@ TEST_F(APITest, CanvasFeatureOperations)
     auto deleteFeatureResponse = cpr::Delete(
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(newCanvasId) + "/features/" + std::to_string(featureId)},
         noPersistParam);
-    ASSERT_EQ(deleteFeatureResponse.status_code, 200);
+    ASSERT_EQ(deleteFeatureResponse.status_code, 204);
 
     // Delete the canvas
     auto deleteCanvasResponse = cpr::Delete(cpr::Url{BASE_URL + "/canvases/" + std::to_string(newCanvasId)},
@@ -319,7 +319,7 @@ TEST_F(APITest, MultipleCanvasOperations)
     for (auto &future : deleteFutures)
     {
         auto response = future.get();
-        ASSERT_EQ(response.status_code, 200);
+        ASSERT_EQ(response.status_code, 204);
     }
 }
 
@@ -377,7 +377,7 @@ TEST_F(APITest, MultipleFeatureOperations)
     for (auto &future : featureFutures)
     {
         auto response = future.get();
-        ASSERT_EQ(response.status_code, 200);
+        ASSERT_EQ(response.status_code, 201);
         auto featureJson = json::parse(response.text);
         featureIds.push_back(featureJson["id"].get<int>());
     }
@@ -397,13 +397,13 @@ TEST_F(APITest, MultipleFeatureOperations)
     for (auto &future : deleteFutures)
     {
         auto response = future.get();
-        ASSERT_EQ(response.status_code, 200);
+        ASSERT_EQ(response.status_code, 204);
     }
 
     // Cleanup canvas
     auto deleteCanvasResponse = cpr::Delete(cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
                                             noPersistParam);
-    ASSERT_EQ(deleteCanvasResponse.status_code, 200);
+    ASSERT_EQ(deleteCanvasResponse.status_code, 204);
 }
 
 // Test rapid creation/deletion cycles
@@ -453,7 +453,7 @@ TEST_F(APITest, RapidCreationDeletion)
                 cpr::Url{BASE_URL + "/canvases/" + std::to_string(cycleCanvasIds.back()) + "/features"},
                 cpr::Body{featureData.dump()},
                 jsonHeader, noPersistParam);
-            ASSERT_EQ(featureResponse.status_code, 200);
+            ASSERT_EQ(featureResponse.status_code, 201);
         }
 
         // Delete all canvases in this cycle
@@ -463,7 +463,7 @@ TEST_F(APITest, RapidCreationDeletion)
 
             auto response = cpr::Delete(cpr::Url{BASE_URL + "/canvases/" + std::to_string(id)},
                                         noPersistParam);
-            ASSERT_EQ(response.status_code, 200);
+            ASSERT_EQ(response.status_code, 204);
         }
     }
 }
@@ -507,7 +507,7 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
         cpr::Body{featureData.dump()},
         jsonHeader, noPersistParam
     );
-    ASSERT_EQ(createFeatureResponse.status_code, 200);
+    ASSERT_EQ(createFeatureResponse.status_code, 201);
     auto featureJson = json::parse(createFeatureResponse.text);
     int featureId = featureJson["id"].get<int>();
 
@@ -532,7 +532,7 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
         cpr::Body{effect1Data.dump()},
         jsonHeader, noPersistParam
     );
-    ASSERT_EQ(createEffect1Response.status_code, 200);
+    ASSERT_EQ(createEffect1Response.status_code, 201);
 
     // Create second effect
     json effect2Data = {
@@ -550,7 +550,7 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
         cpr::Body{effect2Data.dump()},
         jsonHeader, noPersistParam
     );
-    ASSERT_EQ(createEffect2Response.status_code, 200);
+    ASSERT_EQ(createEffect2Response.status_code, 201);
 
     // Get the canvas to verify effects
     auto getCanvasResponse = cpr::Get(
@@ -598,13 +598,13 @@ TEST_F(APITest, CanvasFeatureEffectWithSchedule)
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/features/" + std::to_string(featureId)},
         noPersistParam
     );
-    ASSERT_EQ(deleteFeatureResponse.status_code, 200);
+    ASSERT_EQ(deleteFeatureResponse.status_code, 204);
 
     auto deleteCanvasResponse = cpr::Delete(
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
         noPersistParam
     );
-    ASSERT_EQ(deleteCanvasResponse.status_code, 200);
+    ASSERT_EQ(deleteCanvasResponse.status_code, 204);
 }
 
 TEST_F(APITest, CanvasUpdatePreservesFeatures)
@@ -643,7 +643,7 @@ TEST_F(APITest, CanvasUpdatePreservesFeatures)
         cpr::Body{featureData.dump()},
         jsonHeader, noPersistParam
     );
-    ASSERT_EQ(createFeatureResponse.status_code, 200);
+    ASSERT_EQ(createFeatureResponse.status_code, 201);
     const int featureId = json::parse(createFeatureResponse.text)["id"].get<int>();
 
     auto getCanvasResponse = cpr::Get(
@@ -679,7 +679,7 @@ TEST_F(APITest, CanvasUpdatePreservesFeatures)
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
         noPersistParam
     );
-    ASSERT_EQ(deleteCanvasResponse.status_code, 200);
+    ASSERT_EQ(deleteCanvasResponse.status_code, 204);
 }
 
 TEST_F(APITest, EffectCatalogExposesDefinitions)
@@ -764,7 +764,7 @@ TEST_F(APITest, CanvasPixelsEndpointReturnsBinaryFrame)
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
         noPersistParam
     );
-    ASSERT_EQ(deleteCanvasResponse.status_code, 200);
+    ASSERT_EQ(deleteCanvasResponse.status_code, 204);
 }
 
 TEST_F(APITest, CanvasRuntimeControlEndpointsSupportWebUiFlow)
@@ -801,14 +801,14 @@ TEST_F(APITest, CanvasRuntimeControlEndpointsSupportWebUiFlow)
         cpr::Body{effectOne.dump()},
         jsonHeader, noPersistParam
     );
-    ASSERT_EQ(addEffectOneResponse.status_code, 200);
+    ASSERT_EQ(addEffectOneResponse.status_code, 201);
 
     auto addEffectTwoResponse = cpr::Post(
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId) + "/effects"},
         cpr::Body{effectTwo.dump()},
         jsonHeader, noPersistParam
     );
-    ASSERT_EQ(addEffectTwoResponse.status_code, 200);
+    ASSERT_EQ(addEffectTwoResponse.status_code, 201);
 
     auto stopResponse = cpr::Post(
         cpr::Url{BASE_URL + "/canvases/stop"},
@@ -846,5 +846,5 @@ TEST_F(APITest, CanvasRuntimeControlEndpointsSupportWebUiFlow)
         cpr::Url{BASE_URL + "/canvases/" + std::to_string(canvasId)},
         noPersistParam
     );
-    ASSERT_EQ(deleteCanvasResponse.status_code, 200);
+    ASSERT_EQ(deleteCanvasResponse.status_code, 204);
 }

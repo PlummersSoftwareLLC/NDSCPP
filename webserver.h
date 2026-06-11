@@ -120,8 +120,6 @@ class WebServer
 
     crow::response ServeAppConfig() const
     {
-        shared_lock readLock(_apiMutex);
-
         crow::response response(crow::OK);
         response.set_header("Content-Type", "application/javascript; charset=utf-8");
         response.set_header("Cache-Control", "no-store");
@@ -217,20 +215,6 @@ class WebServer
         {
             return handler();
         }
-        catch (const exception &e)
-        {
-            logger->error("Error in {}: {}", context, e.what());
-            return {crow::BAD_REQUEST, string("Error: ") + e.what()};
-        }
-    }
-
-    template <typename Func>
-    crow::response HandleRouteWithNotFound(const string &context, Func &&handler)
-    {
-        try
-        {
-            return handler();
-        }
         catch (const out_of_range &e)
         {
             logger->error("Error in {}: {}", context, e.what());
@@ -254,6 +238,7 @@ public:
 
     ~WebServer()
     {
+        Stop();
     }
 
     void StartAsync()
@@ -379,7 +364,7 @@ public:
         CROW_ROUTE(_crowApp, kRouteCanvasCurEffect)
             .methods(crow::HTTPMethod::POST)([&](const crow::request& req, int canvasId) -> crow::response
             {
-                return HandleRouteWithNotFound(FormatRoute(kRouteCanvasCurEffect, kPOST, canvasId), [&]() -> crow::response
+                return HandleRoute(FormatRoute(kRouteCanvasCurEffect, kPOST, canvasId), [&]() -> crow::response
                 {
                     WithContext(req, api::SetCurrentEffect, canvasId);
                     return crow::response(crow::OK);
@@ -393,7 +378,7 @@ public:
                 return HandleRoute(FormatRoute(kRouteCanvases, kPOST), [&]() -> crow::response
                 {
                     const auto newID = WithContext(req, api::CreateCanvas);
-                    return crow::response(201, nlohmann::json{{"id", newID}}.dump());
+                    return crow::response(crow::CREATED, nlohmann::json{{"id", newID}}.dump());
                 });
             });
 
@@ -404,7 +389,7 @@ public:
                 return HandleRoute(FormatRoute(kRouteCanvasFeatures, kPOST, canvasId), [&]() -> crow::response
                 {
                     const auto newId = WithContext(req, api::CreateFeature, canvasId);
-                    return nlohmann::json{{"id", newId}}.dump();
+                    return crow::response(crow::CREATED, nlohmann::json{{"id", newId}}.dump());
                 });
             });
 
@@ -416,7 +401,7 @@ public:
                 return HandleRoute(FormatRoute(kRouteCanvasFeature, kDELETE, canvasId, featureId), [&]() -> crow::response
                 {
                     WithContext(req, api::DeleteFeature, canvasId, featureId);
-                    return crow::response(crow::OK);
+                    return crow::response(crow::NO_CONTENT);
                 });
             });
 
@@ -428,14 +413,14 @@ public:
                 return HandleRoute(FormatRoute(kRouteCanvas, kDELETE, id), [&]() -> crow::response
                 {
                     WithContext(req, api::DeleteCanvas, id);
-                    return crow::response(crow::OK);
+                    return crow::response(crow::NO_CONTENT);
                 });
             });
 
         CROW_ROUTE(_crowApp, kRouteCanvas)
             .methods(crow::HTTPMethod::PUT)([&](const crow::request &req, int id) -> crow::response
             {
-                return HandleRouteWithNotFound(FormatRoute(kRouteCanvas, kPUT, id), [&]() -> crow::response
+                return HandleRoute(FormatRoute(kRouteCanvas, kPUT, id), [&]() -> crow::response
                 {
                     auto canvas = WithContext(req, api::UpdateCanvasDefinition, id);
                     return crow::response(crow::OK, nlohmann::json(*canvas).dump());
@@ -449,14 +434,14 @@ public:
                 return HandleRoute(FormatRoute(kRouteCanvasEffects, kPOST, canvasId), [&]() -> crow::response
                 {
                     const auto effectIndex = WithContext(req, api::AddEffect, canvasId);
-                    return crow::response(crow::OK, nlohmann::json{{"index", effectIndex}}.dump());
+                    return crow::response(crow::CREATED, nlohmann::json{{"index", effectIndex}}.dump());
                 });
             });
 
         CROW_ROUTE(_crowApp, kRouteCanvasEffect)
             .methods(crow::HTTPMethod::PUT)([&](const crow::request &req, int canvasId, int effectIndex) -> crow::response
             {
-                return HandleRouteWithNotFound(FormatRoute(kRouteCanvasEffect, kPUT, canvasId, effectIndex), [&]() -> crow::response
+                return HandleRoute(FormatRoute(kRouteCanvasEffect, kPUT, canvasId, effectIndex), [&]() -> crow::response
                 {
                     auto effect = WithContext(req, api::UpdateEffect, canvasId, effectIndex);
                     return crow::response(crow::OK, nlohmann::json(*effect).dump());
@@ -466,20 +451,20 @@ public:
         CROW_ROUTE(_crowApp, kRouteCanvasEffect)
             .methods(crow::HTTPMethod::DELETE)([&](const crow::request &req, int canvasId, int effectIndex) -> crow::response
             {
-                return HandleRouteWithNotFound(FormatRoute(kRouteCanvasEffect, kDELETE, canvasId, effectIndex), [&]() -> crow::response
+                return HandleRoute(FormatRoute(kRouteCanvasEffect, kDELETE, canvasId, effectIndex), [&]() -> crow::response
                 {
                     WithContext(req, api::DeleteEffect, canvasId, effectIndex);
-                    return crow::response(crow::OK);
+                    return crow::response(crow::NO_CONTENT);
                 });
             });
 
         // Binary pixel data for canvas preview
         // Header: uint16_t width, uint16_t height, uint16_t fps
-        // Body:   width*height * 3 bytes (RGB triplets, row-major)
+        // Body:   width * height * RGB byte count (triplets, row-major)
         CROW_ROUTE(_crowApp, kRouteCanvasPixels)
             .methods(crow::HTTPMethod::GET)([&](int canvasId) -> crow::response
             {
-                return HandleRouteWithNotFound(FormatRoute(kRouteCanvasPixels, canvasId), [&]() -> crow::response
+                return HandleRoute(FormatRoute(kRouteCanvasPixels, canvasId), [&]() -> crow::response
                 {
                     shared_lock readLock(_apiMutex);
                     auto canvas = _controller.GetCanvasById(canvasId);
@@ -490,11 +475,11 @@ public:
                     uint16_t fps = static_cast<uint16_t>(canvas->Effects().GetFPS());
 
                     string body;
-                    body.resize(6 + pixels.size() * 3);
+                    body.resize(6 + pixels.size() * sizeof(CRGB));
                     memcpy(&body[0], &w, 2);
                     memcpy(&body[2], &h, 2);
                     memcpy(&body[4], &fps, 2);
-                    memcpy(&body[6], pixels.data(), pixels.size() * 3);
+                    memcpy(&body[6], pixels.data(), pixels.size() * sizeof(CRGB));
 
                     crow::response response(crow::OK, std::move(body));
                     response.set_header("Content-Type", "application/octet-stream");
@@ -542,6 +527,7 @@ public:
     void Stop()
     {
         _crowApp.stop();
+        _routesRegistered = false;
     }
 
     void Wait()
