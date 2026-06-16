@@ -42,7 +42,7 @@
         "@schematics/angular": "^21.2.11",
         "@swc-node/register": "~1.9.1",
         "@swc/core": "~1.5.7",
-        "@swc/helpers": "~0.5.11",
+        "@swc/helpers": "~0.5.23",
         "@types/jest": "^30.0.0",
         "@types/node": "25.5.0",
         "@typescript-eslint/utils": "^8.13.0",
