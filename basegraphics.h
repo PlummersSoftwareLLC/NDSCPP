@@ -3,7 +3,7 @@ using namespace std;
 
 // BaseGraphics
 //
-// A class that can do all the basic drawing functions (pixel, line, circle, etc) of the ILEDGraphics 
+// A class that can do all the basic drawing functions (pixel, line, circle, etc) of the ILEDGraphics
 // interface to its own internal buffer of pixels.  It manipulates the buffer only through SetPixel
 
 #include <vector>
@@ -19,27 +19,27 @@ protected:
     uint32_t _height;
     vector<CRGB> _pixels;
 
-    virtual inline __attribute__((always_inline)) uint32_t _index(uint32_t x, uint32_t y) const 
+    virtual inline __attribute__((always_inline)) uint32_t _index(uint32_t x, uint32_t y) const
     {
         return y * _width + x;
     }
 
-    constexpr inline bool _isInBounds(uint32_t x, uint32_t y) const 
+    constexpr inline bool _isInBounds(uint32_t x, uint32_t y) const
     {
         return (x < _width && y < _height);
     }
 
 public:
-    explicit BaseGraphics(uint32_t width, uint32_t height) 
+    explicit BaseGraphics(uint32_t width, uint32_t height)
     {
         if (width == 0 || height == 0)
             throw invalid_argument("Width and height must be greater than 0");
         if (static_cast<uint64_t>(width) * height > numeric_limits<size_t>::max() / sizeof(CRGB))
             throw overflow_error("Requested dimensions too large");
-            
+
         _width = width;
         _height = height;
-        _pixels.resize(width * height);
+        _pixels.resize(static_cast<size_t>(width) * height);
     }
 
     // ICanvas methods
@@ -66,7 +66,7 @@ public:
             _pixels[_index(x, y)] = color;
     }
 
-    CRGB GetPixel(uint32_t x, uint32_t y) const override 
+    CRGB GetPixel(uint32_t x, uint32_t y) const override
     {
         if (_isInBounds(x, y))
             return _pixels[_index(x, y)];
@@ -83,7 +83,7 @@ public:
         if (x >= _width || y >= _height) return;
         width = min(width, _width - x);
         height = min(height, _height - y);
-        
+
         if (color == CRGB::Black) {
             for (uint32_t j = y; j < y + height; ++j)
                 memset(&_pixels[_index(x, j)], 0, width * sizeof(CRGB));
@@ -99,17 +99,17 @@ public:
         int32_t sx = (x1 < x2) ? 1 : -1, sy = (y1 < y2) ? 1 : -1;
         int32_t err = dx - dy;
 
-        while (true) 
+        while (true)
         {
             SetPixel(x1, y1, color);
             if (x1 == x2 && y1 == y2) break;
             int e2 = 2 * err;
-            if (e2 > -dy) 
+            if (e2 > -dy)
             {
                 err -= dy;
                 x1 += sx;
             }
-            if (e2 < dx) 
+            if (e2 < dx)
             {
                 err += dx;
                 y1 += sy;
@@ -122,7 +122,7 @@ public:
         uint32_t cx = 0, cy = radius;
         int32_t  d = 1 - radius;
 
-        while (cy >= cx) 
+        while (cy >= cx)
         {
             SetPixel(x + cx, y + cy, color);
             SetPixel(x - cx, y + cy, color);
@@ -138,7 +138,7 @@ public:
             {
                 d += 2 * cx + 1;
             }
-            else 
+            else
             {
                 --cy;
                 d += 2 * (cx - cy) + 1;
@@ -194,7 +194,7 @@ public:
         if (!bMerge)
         {
             // Non-merging implementation
-            
+
             if (startIdx < arraySize)
             {
                 CRGB c1 = c;
