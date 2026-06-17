@@ -112,7 +112,7 @@ public:
         const auto& graphics = _canvas->Graphics();
 
         // Fast path for full canvas.  We assume this is the default case and optimize for it by telling the compiler to expect it.
-        if (__builtin_expect(_width == graphics.Width() && _height == graphics.Height() && _offsetX == 0 && _offsetY == 0, 1))
+        if (__builtin_expect(_width == graphics.Width() && _height == graphics.Height() && _offsetX == 0 && _offsetY == 0 && (!_reversed || _height == 1), 1))
             return Utilities::ConvertPixelsToByteArray(graphics.GetPixels(), _reversed, _redGreenSwap);
 
         // Pre-calculate the final buffer size (3 bytes per pixel)
@@ -123,7 +123,9 @@ public:
         {
             for (uint32_t x = 0; x < _width; ++x)
             {
-                uint32_t canvasX = x + _offsetX;
+                uint32_t canvasX = (_reversed && _height > 1)
+                    ? (_offsetX + _width - 1 - x)
+                    : (x + _offsetX);
                 uint32_t canvasY = y + _offsetY;
 
                 // Calculate output position directly in bytes
@@ -155,7 +157,7 @@ public:
             }
         }
 
-        if (_reversed)
+        if (_reversed && _height == 1)
         {
             // In-place reversal of RGB groups
             const size_t numPixels = result.size() / 3;
@@ -173,11 +175,12 @@ public:
 
     vector<uint8_t> GetDataFrame() const override
     {
-        // Calculate epoch time
-        auto now = system_clock::now();
-        auto epoch = duration_cast<microseconds>(now.time_since_epoch()).count();
-        uint64_t seconds = epoch / 1'000'000 + TimeOffset();
-        uint64_t microseconds = epoch % 1'000'000;
+        // Calculate the scheduled display time. Preserve fractional TimeOffset()
+        // seconds so frames land safely in the client's double-buffer window.
+        const auto displayTime = system_clock::now() + duration_cast<system_clock::duration>(duration<double>(TimeOffset()));
+        const auto epoch = duration_cast<microseconds>(displayTime.time_since_epoch()).count();
+        const uint64_t seconds = epoch / 1'000'000;
+        const uint64_t microseconds = epoch % 1'000'000;
 
         auto pixelData = GetPixelData();
 
@@ -210,7 +213,9 @@ inline void to_json(nlohmann::json& j, const ILEDFeature & feature)
             {"isConnected",       feature.Socket()->IsConnected()},
             {"queueDepth",        feature.Socket()->GetCurrentQueueDepth()},
             {"queueMaxSize",      feature.Socket()->GetQueueMaxSize()},
-            {"reconnectCount",    feature.Socket()->GetReconnectCount()}
+            {"reconnectCount",    feature.Socket()->GetReconnectCount()},
+            {"failedConnectCount", feature.Socket()->GetFailedConnectCount()},
+            {"lastSocketError",   feature.Socket()->GetLastSocketError()}
         };
 
     const auto &response = feature.Socket()->LastClientResponse();

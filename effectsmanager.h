@@ -7,6 +7,7 @@ using namespace chrono;
 #include "effects/misceffects.h"
 #include "effects/paletteeffect.h"
 #include "effects/starfield.h"
+#include "effects/stockbannereffect.h"
 #include "effects/videoeffect.h"
 #include "effects/bouncingballeffect.h"
 
@@ -291,6 +292,7 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
         jsonPair<SolidColorFill>(),
         jsonPair<PaletteEffect>(),
         jsonPair<StarfieldEffect>(),
+        jsonPair<StockBanner>(),
         jsonPair<MP4PlaybackEffect>()
 };
 

@@ -147,7 +147,8 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    logger->info("Server listening on http://localhost:{}/", ptrController->GetPort());
+    logger->info("Dashboard listening on http://localhost:{}/", ptrController->GetPort());
+    logger->info("API listening on http://localhost:{}/api", ptrController->GetPort());
 
     while (!gShouldExit)
         this_thread::sleep_for(100ms);
