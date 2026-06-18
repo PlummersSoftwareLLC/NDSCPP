@@ -173,11 +173,8 @@ public:
         return result;
     }
 
-    vector<uint8_t> GetDataFrame() const override
+    vector<uint8_t> GetDataFrame(system_clock::time_point displayTime) const override
     {
-        // Calculate the scheduled display time. Preserve fractional TimeOffset()
-        // seconds so frames land safely in the client's double-buffer window.
-        const auto displayTime = system_clock::now() + duration_cast<system_clock::duration>(duration<double>(TimeOffset()));
         const auto epoch = duration_cast<microseconds>(displayTime.time_since_epoch()).count();
         const uint64_t seconds = epoch / 1'000'000;
         const uint64_t microseconds = epoch % 1'000'000;

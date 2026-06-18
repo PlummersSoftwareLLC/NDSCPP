@@ -462,9 +462,7 @@ private:
 
     void WorkerLoop()
     {
-        steady_clock::time_point lastSendTime = steady_clock::now();
-        constexpr auto kMaxBatchSize = 2;
-        constexpr auto kMaxBatchDelay = 25ms;
+        constexpr auto kMaxBatchSize = 1;
         constexpr auto reconnectDelay = 1000ms;
 
         while (_running)
@@ -474,36 +472,31 @@ private:
                 vector<uint8_t> combinedBuffer;
                 size_t packetCount = 0;
 
-                auto now = steady_clock::now();
-                auto bTimeToSend = duration_cast<milliseconds>(now - lastSendTime) >= kMaxBatchDelay;
-
-                // Calculate total bytes first to preallocate buffer
                 {
                     unique_lock<mutex> lock(_queueMutex);
-                    size_t tempCount = 0;
-                    size_t tempBytes = 0;
-                    auto queueCopy = _frameQueue;
-                    while (!queueCopy.empty() && tempCount < kMaxBatchSize)
+
+                    if (!_frameQueue.empty())
                     {
-                        tempBytes += queueCopy.front().size();
-                        tempCount++;
-                        queueCopy.pop();
-                    }
-                    if (tempBytes > 0) 
+                        size_t tempCount = 0;
+                        size_t tempBytes = 0;
+                        auto queueCopy = _frameQueue;
+                        while (!queueCopy.empty() && tempCount < kMaxBatchSize)
+                        {
+                            tempBytes += queueCopy.front().size();
+                            tempCount++;
+                            queueCopy.pop();
+                        }
+
                         combinedBuffer.reserve(tempBytes);
-                }
 
-                if (!_frameQueue.empty() && (_frameQueue.size() >= kMaxBatchSize || bTimeToSend))
-                {
-                    unique_lock<mutex> lock(_queueMutex);
-                    
-                    while (!_frameQueue.empty() && packetCount < kMaxBatchSize)
-                    {
-                        vector<uint8_t>& frame = _frameQueue.front();
-                        packetCount++;
-                        combinedBuffer.insert(combinedBuffer.end(), frame.begin(), frame.end());
-                        _totalQueuedBytes -= frame.size();
-                        _frameQueue.pop();
+                        while (!_frameQueue.empty() && packetCount < kMaxBatchSize)
+                        {
+                            vector<uint8_t>& frame = _frameQueue.front();
+                            packetCount++;
+                            combinedBuffer.insert(combinedBuffer.end(), frame.begin(), frame.end());
+                            _totalQueuedBytes -= frame.size();
+                            _frameQueue.pop();
+                        }
                     }
                 }
 
@@ -513,7 +506,6 @@ private:
 
                     if (!combinedBuffer.empty())
                     {
-                        lastSendTime = steady_clock::now();
                         optional<ClientResponse> response = SendFrame(std::move(combinedBuffer));
                         if (response)
                         {
