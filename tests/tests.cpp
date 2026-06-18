@@ -6,13 +6,21 @@
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <../json.hpp>
+#include <spdlog/sinks/null_sink.h>
 #include <string>
 #include <vector>
 #include <thread>
 
+#include "../basegraphics.h"
+#include "../ledfeature.h"
+
 using json = nlohmann::json;
 using namespace std;
 using namespace std::chrono;
+
+atomic<uint32_t> LEDFeature::_nextId{0};
+atomic<uint32_t> SocketChannel::_nextId{0};
+shared_ptr<spdlog::logger> logger = spdlog::null_logger_mt("tests");
 
 const std::string BASE_URL = "http://localhost:7777/api";
 
@@ -20,6 +28,66 @@ const int stddelay = 5;
 
 const auto jsonHeader = cpr::Header{{"Content-Type", "application/json"}};
 const auto noPersistParam = cpr::Parameters{{"nopersist", "1"}};
+
+class DummyEffectsManager : public IEffectsManager
+{
+public:
+    void AddEffect(shared_ptr<ILEDEffect>) override {}
+    void RemoveEffect(shared_ptr<ILEDEffect>&) override {}
+    void StartCurrentEffect(ICanvas&) override {}
+    void SetCurrentEffect(size_t, ICanvas&) override {}
+    size_t GetCurrentEffect() const override { return 0; }
+    size_t EffectCount() const override { return 0; }
+    vector<shared_ptr<ILEDEffect>> Effects() const override { return {}; }
+    void UpdateCurrentEffect(ICanvas&, milliseconds) override {}
+    void NextEffect() override {}
+    void PreviousEffect() override {}
+    string CurrentEffectName() const override { return ""; }
+    void ClearEffects() override {}
+    bool WantsToRun() const override { return false; }
+    void WantToRun(bool) override {}
+    bool IsRunning() const override { return false; }
+    void Start(ICanvas&) override {}
+    void Stop() override {}
+    void SetFPS(uint16_t fps) override { _fps = fps; }
+    uint16_t GetFPS() const override { return _fps; }
+    void SetEffects(vector<shared_ptr<ILEDEffect>>) override {}
+    void SetCurrentEffectIndex(int) override {}
+
+private:
+    uint16_t _fps = 30;
+};
+
+class FeatureMappingCanvas : public ICanvas
+{
+public:
+    FeatureMappingCanvas(uint32_t width, uint32_t height)
+        : _graphics(width, height)
+    {
+    }
+
+    uint32_t Id() const override { return 1; }
+    uint32_t SetId(uint32_t id) override { return id; }
+    string Name() const override { return "Feature Mapping Canvas"; }
+    uint32_t AddFeature(shared_ptr<ILEDFeature> feature) override
+    {
+        feature->SetCanvas(this);
+        _features.push_back(feature);
+        return feature->Id();
+    }
+    bool RemoveFeatureById(uint16_t) override { return false; }
+    vector<shared_ptr<ILEDFeature>> Features() override { return _features; }
+    const vector<shared_ptr<ILEDFeature>> Features() const override { return _features; }
+    ILEDGraphics& Graphics() override { return _graphics; }
+    const ILEDGraphics& Graphics() const override { return _graphics; }
+    IEffectsManager& Effects() override { return _effects; }
+    const IEffectsManager& Effects() const override { return _effects; }
+
+private:
+    BaseGraphics _graphics;
+    DummyEffectsManager _effects;
+    vector<shared_ptr<ILEDFeature>> _features;
+};
 
 
 class APITest : public ::testing::Test
@@ -765,6 +833,37 @@ TEST_F(APITest, CanvasPixelsEndpointReturnsBinaryFrame)
         noPersistParam
     );
     ASSERT_EQ(deleteCanvasResponse.status_code, 204);
+}
+
+TEST_F(APITest, ReversedMatrixFeatureMirrorsRowsForHardware)
+{
+    FeatureMappingCanvas canvas(3, 2);
+    auto feature = make_shared<LEDFeature>(
+        "127.0.0.1",
+        "Matrix Mapping Feature",
+        49152,
+        3,
+        2,
+        0,
+        0,
+        true
+    );
+    canvas.AddFeature(feature);
+
+    canvas.Graphics().SetPixel(0, 0, CRGB(10, 0, 0));
+    canvas.Graphics().SetPixel(1, 0, CRGB(0, 20, 0));
+    canvas.Graphics().SetPixel(2, 0, CRGB(0, 0, 30));
+    canvas.Graphics().SetPixel(0, 1, CRGB(40, 0, 0));
+    canvas.Graphics().SetPixel(1, 1, CRGB(0, 50, 0));
+    canvas.Graphics().SetPixel(2, 1, CRGB(0, 0, 60));
+
+    const auto pixels = feature->GetPixelData();
+    const vector<uint8_t> expected = {
+        0, 0, 30, 0, 20, 0, 10, 0, 0,
+        0, 0, 60, 0, 50, 0, 40, 0, 0
+    };
+
+    ASSERT_EQ(pixels, expected);
 }
 
 TEST_F(APITest, CanvasRuntimeControlEndpointsSupportWebUiFlow)

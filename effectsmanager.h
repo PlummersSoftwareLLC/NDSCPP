@@ -7,6 +7,7 @@ using namespace chrono;
 #include "effects/misceffects.h"
 #include "effects/paletteeffect.h"
 #include "effects/starfield.h"
+#include "effects/stockbannereffect.h"
 #include "effects/videoeffect.h"
 #include "effects/bouncingballeffect.h"
 
@@ -17,6 +18,7 @@ using namespace chrono;
 // can also be used to clear all effects.
 
 #include "interfaces.h"
+#include <algorithm>
 #include <vector>
 #include <mutex>
 
@@ -186,8 +188,12 @@ public:
 
         _workerThread = thread([this, &canvas]()
         {
-            auto frameDuration = 1000ms / _fps; // Target duration per frame
-            auto nextFrameTime = steady_clock::now();
+            const auto effectiveFps = max<uint16_t>(1, _fps);
+            const auto frameDuration = duration_cast<steady_clock::duration>(duration<double>(1.0 / effectiveFps));
+            const auto effectDelta = duration_cast<milliseconds>(frameDuration + 500us);
+            const auto steadyStartTime = steady_clock::now();
+            const auto systemStartTime = system_clock::now();
+            uint64_t frameIndex = 0;
             constexpr auto bUseCompression = true;
 
             // Starting the canvas should start the effect at least one time, as many effects
@@ -197,14 +203,27 @@ public:
 
             while (_running)
             {
+                const auto nextFrameTime = steadyStartTime + frameDuration * (frameIndex + 1);
+
                 {
                     lock_guard lock(_effectsMutex);
 
                     // Update the effects and enqueue frames
-                    UpdateCurrentEffect(canvas, frameDuration);
-                    for (const auto &feature : canvas.Features())
+                    UpdateCurrentEffect(canvas, effectDelta);
+
+                    const auto features = canvas.Features();
+                    double maxTimeOffsetSeconds = 0.0;
+                    for (const auto &feature : features)
+                        maxTimeOffsetSeconds = max(maxTimeOffsetSeconds, feature->TimeOffset());
+
+                    const auto displayTime =
+                        systemStartTime +
+                        duration_cast<system_clock::duration>(frameDuration * frameIndex) +
+                        duration_cast<system_clock::duration>(duration<double>(maxTimeOffsetSeconds));
+
+                    for (const auto &feature : features)
                     {
-                        auto frame = feature->GetDataFrame();
+                        auto frame = feature->GetDataFrame(displayTime);
                         if (bUseCompression)
                         {
                             auto compressedFrame = feature->Socket()->CompressFrame(frame);
@@ -216,17 +235,20 @@ public:
                         }
                     }
                 }
-                
-                // We wait here while periodically checking _running
-                
-                auto now = steady_clock::now();
-                while (now < nextFrameTime && _running) {
-                    this_thread::sleep_for(min(steady_clock::duration(10ms), nextFrameTime - now));
-                    now = steady_clock::now(); // Update 'now' to avoid an infinite loop
+
+                frameIndex++;
+
+                // Avoid bursty catch-up if rendering or socket work falls behind badly.
+                const auto now = steady_clock::now();
+                if (now > nextFrameTime + frameDuration)
+                {
+                    const auto elapsedTicks = duration_cast<steady_clock::duration>(now - steadyStartTime).count();
+                    const auto frameTicks = frameDuration.count();
+                    frameIndex = static_cast<uint64_t>(elapsedTicks / frameTicks) + 1;
                 }
 
-                // Set the next frame target
-                nextFrameTime += frameDuration;
+                while (_running && steady_clock::now() < nextFrameTime)
+                    this_thread::sleep_until(nextFrameTime);
             } });
     }
 
@@ -291,6 +313,7 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
         jsonPair<SolidColorFill>(),
         jsonPair<PaletteEffect>(),
         jsonPair<StarfieldEffect>(),
+        jsonPair<StockBanner>(),
         jsonPair<MP4PlaybackEffect>()
 };
 

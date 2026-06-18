@@ -175,6 +175,8 @@ public:
     virtual uint64_t GetLastBytesPerSecond() const = 0;
     virtual ClientResponse LastClientResponse() const = 0;
     virtual uint32_t GetReconnectCount() const = 0;
+    virtual uint32_t GetFailedConnectCount() const = 0;
+    virtual string GetLastSocketError() const = 0;
     virtual size_t GetCurrentQueueDepth() const = 0;
     virtual size_t GetQueueMaxSize() const = 0;
 
@@ -212,7 +214,7 @@ public:
 
     // Data retrieval
     virtual vector<uint8_t> GetPixelData() const = 0;
-    virtual vector<uint8_t> GetDataFrame() const = 0;
+    virtual vector<uint8_t> GetDataFrame(system_clock::time_point displayTime) const = 0;
 
     virtual shared_ptr<ISocketChannel> Socket() = 0;
     virtual const shared_ptr<ISocketChannel> Socket() const = 0;

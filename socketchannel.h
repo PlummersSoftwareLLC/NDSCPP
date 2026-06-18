@@ -258,6 +258,8 @@ class SocketChannel : public ISocketChannel
     SpeedTracker _speedTracker;
 
     uint32_t _reconnectCount;
+    uint32_t _failedConnectCount;
+    string _lastSocketError;
     system_clock::time_point _lastInvalidByteWarning;
 
     queue<vector<uint8_t>> _frameQueue;
@@ -277,8 +279,10 @@ public:
           _lastClientResponse(),
           _lastConnectionAttempt(system_clock::now()),
           _reconnectCount(0),
-          _totalQueuedBytes(0),
-          _lastInvalidByteWarning(system_clock::now() - 60s)
+          _failedConnectCount(0),
+          _lastSocketError(),
+          _lastInvalidByteWarning(system_clock::now() - 60s),
+          _totalQueuedBytes(0)
     {
     }
 
@@ -308,6 +312,18 @@ public:
     {
         lock_guard lock(_mutex);
         return _reconnectCount;
+    }
+
+    uint32_t GetFailedConnectCount() const override
+    {
+        lock_guard lock(_mutex);
+        return _failedConnectCount;
+    }
+
+    string GetLastSocketError() const override
+    {
+        lock_guard lock(_mutex);
+        return _lastSocketError;
     }
 
     virtual uint64_t GetLastBytesPerSecond() const override
@@ -364,7 +380,7 @@ public:
         constexpr auto kMaxResponseAge = 2s;
 
         lock_guard lock(_responseMutex);
-        if (_lastResponseTime - system_clock::now() > kMaxResponseAge)
+        if (system_clock::now() - _lastResponseTime > kMaxResponseAge)
             return ClientResponse {}; // Return empty response if too old
 
         return _lastClientResponse; 
@@ -422,6 +438,22 @@ bool EnqueueFrame(vector<uint8_t>&& frameData) override
 
 private:
 
+    void RecordConnectFailure(const string& error)
+    {
+        lock_guard lock(_mutex);
+        _isConnected = false;
+        _failedConnectCount++;
+        _lastSocketError = error;
+    }
+
+    void RecordConnectSuccess()
+    {
+        lock_guard lock(_mutex);
+        _isConnected = true;
+        _reconnectCount++;
+        _lastSocketError.clear();
+    }
+
     // Worker Loop
     //
     // The main duties of the WorkerLoop are to send frames to the client and read responses from the client.
@@ -430,9 +462,7 @@ private:
 
     void WorkerLoop()
     {
-        steady_clock::time_point lastSendTime = steady_clock::now();
-        constexpr auto kMaxBatchSize = 20;
-        constexpr auto kMaxBatchDelay = 1000ms;  // Fixed variable name
+        constexpr auto kMaxBatchSize = 1;
         constexpr auto reconnectDelay = 1000ms;
 
         while (_running)
@@ -442,36 +472,31 @@ private:
                 vector<uint8_t> combinedBuffer;
                 size_t packetCount = 0;
 
-                auto now = steady_clock::now();
-                auto bTimeToSend = duration_cast<milliseconds>(now - lastSendTime) >= kMaxBatchDelay;
-
-                // Calculate total bytes first to preallocate buffer
                 {
                     unique_lock<mutex> lock(_queueMutex);
-                    size_t tempCount = 0;
-                    size_t tempBytes = 0;
-                    auto queueCopy = _frameQueue;
-                    while (!queueCopy.empty() && tempCount < kMaxBatchSize)
+
+                    if (!_frameQueue.empty())
                     {
-                        tempBytes += queueCopy.front().size();
-                        tempCount++;
-                        queueCopy.pop();
-                    }
-                    if (tempBytes > 0) 
+                        size_t tempCount = 0;
+                        size_t tempBytes = 0;
+                        auto queueCopy = _frameQueue;
+                        while (!queueCopy.empty() && tempCount < kMaxBatchSize)
+                        {
+                            tempBytes += queueCopy.front().size();
+                            tempCount++;
+                            queueCopy.pop();
+                        }
+
                         combinedBuffer.reserve(tempBytes);
-                }
 
-                if (!_frameQueue.empty() && (_frameQueue.size() >= kMaxBatchSize || bTimeToSend))
-                {
-                    unique_lock<mutex> lock(_queueMutex);
-                    
-                    while (!_frameQueue.empty() && packetCount < kMaxBatchSize)
-                    {
-                        vector<uint8_t>& frame = _frameQueue.front();
-                        packetCount++;
-                        combinedBuffer.insert(combinedBuffer.end(), frame.begin(), frame.end());
-                        _totalQueuedBytes -= frame.size();
-                        _frameQueue.pop();
+                        while (!_frameQueue.empty() && packetCount < kMaxBatchSize)
+                        {
+                            vector<uint8_t>& frame = _frameQueue.front();
+                            packetCount++;
+                            combinedBuffer.insert(combinedBuffer.end(), frame.begin(), frame.end());
+                            _totalQueuedBytes -= frame.size();
+                            _frameQueue.pop();
+                        }
                     }
                 }
 
@@ -481,7 +506,6 @@ private:
 
                     if (!combinedBuffer.empty())
                     {
-                        lastSendTime = steady_clock::now();
                         optional<ClientResponse> response = SendFrame(std::move(combinedBuffer));
                         if (response)
                         {
@@ -688,7 +712,10 @@ private:
         
         int tempSocket = socket(AF_INET, SOCK_STREAM, 0);
         if (tempSocket == -1)
+        {
+            RecordConnectFailure("socket failed: " + string(strerror(errno)));
             return false;
+        }
 
         struct sockaddr_in serverAddr;
         memset(&serverAddr, 0, sizeof(serverAddr));
@@ -698,6 +725,7 @@ private:
         if (inet_pton(AF_INET, _hostName.c_str(), &serverAddr.sin_addr) <= 0)
         {
             logger->warn("Invalid address for {} [{}]", _hostName, _friendlyName);
+            RecordConnectFailure("invalid address: " + _hostName);
             close(tempSocket);
             return false;
         }
@@ -706,6 +734,7 @@ private:
         if (!SetSocketOptions(tempSocket))
         {
             logger->warn("Could not set socket options for {} [{}]", _hostName, _friendlyName);
+            RecordConnectFailure("could not set socket options");
             close(tempSocket);
             return false;
         }
@@ -717,6 +746,7 @@ private:
             if (errno != EINPROGRESS)
             {
                 logger->debug("Could not connect to {} [{}] errno={}", _hostName, _friendlyName, errno);
+                RecordConnectFailure("connect failed: " + string(strerror(errno)));
                 close(tempSocket);
                 return false;
             }
@@ -729,6 +759,7 @@ private:
             if (poll(&pfd, 1, kConnectTimeout.count()) <= 0)
             {
                 logger->debug("Connection timeout to {} [{}]", _hostName, _friendlyName);
+                RecordConnectFailure("connection timeout");
                 close(tempSocket);
                 return false;
             }
@@ -738,13 +769,16 @@ private:
             socklen_t len = sizeof(error);
             if (getsockopt(tempSocket, SOL_SOCKET, SO_ERROR, &error, &len) < 0 || error != 0)
             {
+                RecordConnectFailure(error == 0
+                    ? "connect status failed: " + string(strerror(errno))
+                    : "connect failed: " + string(strerror(error)));
                 close(tempSocket);
                 return false;
             }
         }
 
-        _reconnectCount++;
-        logger->info("Connection number {} to {}:{} [{}]", _reconnectCount, _hostName, _port, _friendlyName);
+        RecordConnectSuccess();
+        logger->info("Connection number {} to {}:{} [{}]", GetReconnectCount(), _hostName, _port, _friendlyName);
         _socketFd = tempSocket;
         return true;
     }
@@ -783,6 +817,8 @@ inline void to_json(nlohmann::json &j, const ISocketChannel & socket)
         j["friendlyName"] = socket.FriendlyName();
         j["isConnected"] = socket.IsConnected();
         j["reconnectCount"] = socket.GetReconnectCount();
+        j["failedConnectCount"] = socket.GetFailedConnectCount();
+        j["lastSocketError"] = socket.GetLastSocketError();
         j["queueDepth"] = socket.GetCurrentQueueDepth();
         j["queueMaxSize"] = socket.GetQueueMaxSize();
         j["bytesPerSecond"] = socket.GetLastBytesPerSecond();

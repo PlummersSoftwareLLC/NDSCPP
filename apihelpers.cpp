@@ -6,6 +6,7 @@
 #include "effects/paletteeffect.h"
 #include "effects/colorwaveeffect.h"
 #include "effects/starfield.h"
+#include "effects/stockbannereffect.h"
 #include "effects/bouncingballeffect.h"
 #include "effects/fireworkseffect.h"
 #include "effects/videoeffect.h"
@@ -83,6 +84,25 @@ nlohmann::json CreateEffectCatalogJson()
                 {"defaults", json{{"starCount", 100}}},
                 {"fields", json::array({
                     {{"path", "starCount"}, {"label", "Star Count"}, {"input", "number"}, {"step", 1}, {"min", 1}}
+                })}
+            },
+            {
+                {"type", typeid(StockBanner).name()},
+                {"label", "Stock Banner"},
+                {"defaults", json{
+                    {"stockServerHost", "localhost"},
+                    {"stockServerPort", 8888},
+                    {"minQuoteWidth", 64},
+                    {"compactQuoteWidth", 96},
+                    {"refreshSeconds", 60}
+                }},
+                {"fields", json::array({
+                    {{"path", "symbols"}, {"label", "Symbols"}, {"input", "json"}},
+                    {{"path", "stockServerHost"}, {"label", "Stock Server Host"}, {"input", "text"}},
+                    {{"path", "stockServerPort"}, {"label", "Stock Server Port"}, {"input", "number"}, {"step", 1}, {"min", 1}},
+                    {{"path", "minQuoteWidth"}, {"label", "Min Quote Width"}, {"input", "number"}, {"step", 1}, {"min", 32}},
+                    {{"path", "compactQuoteWidth"}, {"label", "Compact Width"}, {"input", "number"}, {"step", 1}, {"min", 64}},
+                    {{"path", "refreshSeconds"}, {"label", "Refresh Seconds"}, {"input", "number"}, {"step", 1}, {"min", 15}}
                 })}
             },
             {

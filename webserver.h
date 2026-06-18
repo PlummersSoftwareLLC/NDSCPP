@@ -532,7 +532,16 @@ public:
 
     void Wait()
     {
-        if (_serverFuture.valid())
+        if (!_serverFuture.valid())
+            return;
+
+        try
+        {
             _serverFuture.get();
+        }
+        catch (const exception &e)
+        {
+            logger->warn("API server stopped with exception: {}", e.what());
+        }
     }
 };
