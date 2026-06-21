@@ -67,10 +67,10 @@ inline string str_snprintf(const char *fmt, size_t len, ...)
 
 inline double millis()
 {
-   return (double)clock() / CLOCKS_PER_SEC * 1000;
+   return static_cast<double>(duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count()) / 1000.0;
 }
 
 inline void delay(int ms)
 {
-    this_thread::sleep_for((milliseconds)ms);
+    this_thread::sleep_for(milliseconds(ms));
 }
