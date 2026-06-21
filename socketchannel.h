@@ -28,11 +28,11 @@ using namespace std;
 
 // How long to wait for a connection to be established or data sent
 
-constexpr auto kConnectTimeout = 10000ms; 
+constexpr auto kConnectTimeout = 10000ms;
 constexpr auto kSendTimeout    = 5000ms;
 
 // SpeedTracker
-// 
+//
 // A class that tracks the speed of data transfer over a given time window.  It is used to
 // calculate the bytes per second that are being sent to the client.  The class uses a
 // weighted average to smooth out the data and provide a more accurate representation of
@@ -205,7 +205,7 @@ struct ClientResponse
         };
     }
 
-    friend void from_json(const nlohmann::json& j, ClientResponse& response) 
+    friend void from_json(const nlohmann::json& j, ClientResponse& response)
     {
         response.size = j.at("responseSize").get<uint32_t>();
         response.sequence = j.at("sequenceNumber").get<uint64_t>();
@@ -225,7 +225,7 @@ struct ClientResponse
 
 // SocketChannel
 //
-// Represents a socket connection to a NightDriverStrip client. Keeps a queue of frames and 
+// Represents a socket connection to a NightDriverStrip client. Keeps a queue of frames and
 // pops them off the queue and sends them on a worker thread. The worker thread will attempt
 // to connect to the client if it is not already connected. The worker thread will also
 // attempt to reconnect if the connection is lost.
@@ -243,10 +243,10 @@ class SocketChannel : public ISocketChannel
     static atomic<uint32_t> _nextId;
     uint32_t _id;
 
-    mutable mutex _mutex;                       // 
+    mutable mutex _mutex;                       //
     mutable mutex _queueMutex;
     mutable mutex _responseMutex;
-    
+
     atomic<bool> _isConnected;
     atomic<bool> _running;
 
@@ -288,15 +288,15 @@ public:
         CloseSocket();
     }
 
-    uint32_t Id() const override 
-    { 
-        return _id; 
+    uint32_t Id() const override
+    {
+        return _id;
     }
 
     size_t GetCurrentQueueDepth() const override
     {
         lock_guard lock(_queueMutex);
-        return _frameQueue.size();  
+        return _frameQueue.size();
     }
 
     size_t GetQueueMaxSize() const override
@@ -351,23 +351,23 @@ public:
         lock_guard lock(_mutex);
         return _isConnected;
     }
-    
+
     const string& HostName() const override { return _hostName; }
     const string& FriendlyName() const override { return _friendlyName; }
-    
+
     // LastClientResponse
-    // 
+    //
     // A copy of the last success/stats packet we got back from the client
-    
+
     ClientResponse LastClientResponse() const override  // Changed to return by value
-    { 
+    {
         constexpr auto kMaxResponseAge = 2s;
 
         lock_guard lock(_responseMutex);
         if (system_clock::now() - _lastResponseTime > kMaxResponseAge)
             return ClientResponse {}; // Return empty response if too old
 
-        return _lastClientResponse; 
+        return _lastClientResponse;
     }
 
     // CompressFrame
@@ -434,7 +434,7 @@ private:
         constexpr auto kMaxBatchSize = 1;
         constexpr auto reconnectDelay = 1000ms;
         constexpr auto pollInterval = 1000ms;
-        
+
         vector<uint8_t> combinedBuffer;
         combinedBuffer.reserve(4096); // Larger reserve for batched frames
         while (_running)
@@ -448,7 +448,7 @@ private:
                 {
                     combinedBuffer.clear();
                     unique_lock<mutex> lock(_queueMutex);
-                    
+
                     while (!_frameQueue.empty() && packetCount < kMaxBatchSize)
                     {
                         vector<uint8_t>& frame = _frameQueue.front();
@@ -462,7 +462,6 @@ private:
                 if (packetCount > 0)
                 {
                     SendFrame(std::move(combinedBuffer));
-                    _speedTracker.AddBytes(combinedBuffer.size());
                 }
 
                 // Check for responses much less frequently
@@ -470,7 +469,7 @@ private:
                 {
                     lastPollTime = now;
                     _speedTracker.UpdateBytesPerSecond();
-                    
+
                     optional<ClientResponse> response = ReadSocketResponse();
                     if (response)
                     {
@@ -484,7 +483,7 @@ private:
             {
                 logger->warn("SocketChannel WorkerLoop exception: {}", e.what());
                 CloseSocket();
-                
+
                 auto nowUs = system_clock::now();
                 if (duration_cast<microseconds>(nowUs - _lastConnectionAttempt) < reconnectDelay)
                 {
@@ -497,7 +496,7 @@ private:
         }
     }
 
-    optional<ClientResponse> ReadSocketResponse() 
+    optional<ClientResponse> ReadSocketResponse()
     {
         const size_t cbToRead = sizeof(ClientResponse);
         optional<ClientResponse> lastResponse;
@@ -568,9 +567,9 @@ private:
         // Set socket to non-blocking mode
 
         int flags = fcntl(socketFd, F_GETFL, 0);
-        if (flags == -1) 
+        if (flags == -1)
             return false;
-        
+
         if (!(fcntl(socketFd, F_SETFL, flags | O_NONBLOCK) != -1))
             return false;
 
@@ -580,7 +579,7 @@ private:
         int keepcnt = 3;          // Number of keepalive probes before declaring dead
         int keepidle = 1;         // Time in seconds before sending keepalive probes
         int keepintvl = 1;        // Time in seconds between keepalive probes
-        int nodelay = 0;
+        int nodelay = 1;
 
         #ifdef __APPLE__
             #ifndef TCP_KEEPIDLE
@@ -596,7 +595,7 @@ private:
         {
             logger->warn("Could not set socket options for {} [{}]", _hostName, _friendlyName);
             return false;
-        }           
+        }
 
         struct timeval timeouttv;
         timeouttv.tv_sec = kSendTimeout.count() / 1000;
@@ -626,11 +625,11 @@ private:
         {
             auto startTime = steady_clock::now();
 
-            ssize_t sent = send(_socketFd, 
-                            frame.data() + totalSent, 
-                            frame.size() - totalSent, 
+            ssize_t sent = send(_socketFd,
+                            frame.data() + totalSent,
+                            frame.size() - totalSent,
                             MSG_NOSIGNAL);
-            
+
             if (sent > 0)
             {
                 totalSent += sent;
@@ -644,11 +643,11 @@ private:
                     logger->debug("EPIPE error for {} [{}]", _hostName, _friendlyName);
 
                     CloseSocket();
-                    if (!ConnectSocket()) 
+                    if (!ConnectSocket())
                         return;
                     continue;
                 }
-                
+
                 if ((errno == EWOULDBLOCK || errno == EAGAIN) && ((steady_clock::now() - startTime) < kSendTimeout))
                 {
                     this_thread::sleep_for(1ms);
@@ -674,7 +673,7 @@ private:
         logger->debug("Attempting to connect to {} [{}]", _hostName, _friendlyName);
 
         _lastConnectionAttempt = system_clock::now();
-        
+
         int tempSocket = socket(AF_INET, SOCK_STREAM, 0);
         if (tempSocket == -1)
             return false;
@@ -714,7 +713,7 @@ private:
             pollfd pfd;
             pfd.fd = tempSocket;
             pfd.events = POLLOUT;
-            
+
             if (poll(&pfd, 1, kConnectTimeout.count()) <= 0)
             {
                 logger->debug("Connection timeout to {} [{}]", _hostName, _friendlyName);
@@ -737,7 +736,7 @@ private:
             logger->info("Connected to {}:{} [{}]", _hostName, _port, _friendlyName);
         else
             logger->debug("Reconnection #{} to {}:{} [{}]", _reconnectCount, _hostName, _port, _friendlyName);
-            
+
         _socketFd = tempSocket;
         return true;
     }
@@ -756,7 +755,7 @@ private:
     void CloseSocket()
     {
         logger->debug("Closing socket for {} [{}]", _hostName, _friendlyName);
-        lock_guard lock(_mutex);  // Add lock    
+        lock_guard lock(_mutex);  // Add lock
         if (_socketFd != -1)
         {
             close(_socketFd);
@@ -781,7 +780,7 @@ inline void to_json(nlohmann::json &j, const ISocketChannel & socket)
         j["bytesPerSecond"] = socket.GetLastBytesPerSecond();
         j["port"] = socket.Port();
         j["id"] = socket.Id();
-        
+
         // Note: featureId and canvasId can't be included here since they're not
         // properties of the socket itself but rather of its container objects
 
@@ -808,7 +807,7 @@ inline void to_json(nlohmann::json &j, const shared_ptr<ISocketChannel> ptrSocke
 
 // ISocketChannel <-- JSON
 
-inline void from_json(const nlohmann::json& j, shared_ptr<ISocketChannel>& socket) 
+inline void from_json(const nlohmann::json& j, shared_ptr<ISocketChannel>& socket)
 {
     socket = make_shared<SocketChannel>(
         j.at("hostName").get<string>(),
