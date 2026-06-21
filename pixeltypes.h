@@ -1358,8 +1358,11 @@ inline void from_json(const nlohmann::json& j, CRGB& color)
             return;
         }
         if (s[0] == '#') s = s.substr(1);
-        uint32_t val = static_cast<uint32_t>(stoul(s, nullptr, 16));
-        color = CRGB(val);
+        try {
+            color = CRGB(static_cast<uint32_t>(stoul(s, nullptr, 16)));
+        } catch (...) {
+            color = CRGB::Black;
+        }
     } else if (j.is_array()) {
         color = CRGB(
             j.at(0).get<uint8_t>(),

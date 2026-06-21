@@ -21,7 +21,7 @@ class Canvas : public ICanvas
     EffectsManager          _effects;
     string                  _name;
     vector<shared_ptr<ILEDFeature>> _features;
-    mutable mutex           _featuresMutex;
+    mutable recursive_mutex _featuresMutex;
 
 public:
     Canvas(string name, uint32_t width, uint32_t height, uint16_t fps = 30) :
@@ -172,7 +172,7 @@ inline void from_json(const nlohmann::json& j, shared_ptr<ICanvas> & canvas)
     canvas = make_shared<Canvas>(
         canvasName,
         j.at("width").get<uint32_t>(),
-        j.at("height").get<uint32_t>()
+        j.value("height", uint32_t(1))
     );
 
     if (!autoAssignCanvasId)
