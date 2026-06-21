@@ -24,9 +24,9 @@ class Canvas : public ICanvas
     mutable recursive_mutex _featuresMutex;
 
 public:
-    Canvas(string name, uint32_t width, uint32_t height, uint16_t fps = 30) : 
+    Canvas(string name, uint32_t width, uint32_t height, uint16_t fps = 30) :
         _id(NextId()),
-        _graphics(width, height), 
+        _graphics(width, height),
         _effects(fps),
         _name(name)
     {
@@ -37,18 +37,28 @@ public:
         return ++_nextId;
     }
 
+    static void EnsureNextIdBeyond(uint32_t id)
+    {
+        uint32_t current = _nextId.load();
+        while (current < id)
+        {
+            if (_nextId.compare_exchange_weak(current, id))
+                break;
+        }
+    }
+
     string Name() const override
     {
         return _name;
     }
 
-    uint32_t Id() const override 
-    { 
-        return _id; 
+    uint32_t Id() const override
+    {
+        return _id;
     }
 
-    uint32_t SetId(uint32_t id) override 
-    { 
+    uint32_t SetId(uint32_t id) override
+    {
         _id = id;
         return _id;
     }
@@ -58,11 +68,11 @@ public:
         lock_guard lock(_featuresMutex);
         return _graphics;
     }
-    
-    const ILEDGraphics& Graphics() const override 
-    { 
+
+    const ILEDGraphics& Graphics() const override
+    {
         lock_guard lock(_featuresMutex);
-        return _graphics; 
+        return _graphics;
     }
 
     IEffectsManager & Effects() override
@@ -98,7 +108,7 @@ public:
         feature->SetCanvas(this);
         uint32_t id = feature->Id();
         _features.push_back(feature);
-        return id;    
+        return id;
     }
 
     bool RemoveFeatureById(uint16_t featureId) override
@@ -122,7 +132,7 @@ public:
 
 // ICanvas --> JSON
 
-inline void to_json(nlohmann::json& j, const ICanvas& canvas) 
+inline void to_json(nlohmann::json& j, const ICanvas& canvas)
 {
     // Serialize the features
     vector<nlohmann::json> jsonFeatures;
@@ -140,7 +150,7 @@ inline void to_json(nlohmann::json& j, const ICanvas& canvas)
     };
 }
 
-inline void to_json(nlohmann::json& j, const shared_ptr<ICanvas>& canvasPtr) 
+inline void to_json(nlohmann::json& j, const shared_ptr<ICanvas>& canvasPtr)
 {
     j = canvasPtr ? nlohmann::json(*canvasPtr) : nullptr;
 }

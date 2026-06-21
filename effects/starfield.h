@@ -55,17 +55,17 @@ public:
         canvas.Graphics().Clear(CRGB::Black);
     }
 
-    void Update(ICanvas& canvas, milliseconds deltaTime) override
+    void Update(ICanvas& canvas, microseconds deltaTime) override
     {
         auto& graphics = canvas.Graphics();
         graphics.FadeFrameBy(32);
 
-        double timeFactor = deltaTime.count() / 1000.0; // Convert delta time to seconds
+        double timeFactor = deltaTime.count() / 1000000.0; // Convert delta time to seconds
 
         for (auto& star : _stars)
         {
             // Update position based on velocity and time
-            const auto xScale = (double) (graphics.Width() / graphics.Height()) / 2.0;
+            const auto xScale = (double)graphics.Width() / (double)max(1u, graphics.Height()) / 2.0;
             star.x += star.dx * timeFactor * xScale;
             star.y += star.dy * timeFactor;
 
