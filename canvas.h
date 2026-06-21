@@ -147,24 +147,32 @@ inline void to_json(nlohmann::json& j, const shared_ptr<ICanvas>& canvasPtr)
 
 // ICanvas <-- JSON
 
-inline void from_json(const nlohmann::json &j, shared_ptr<ICanvas> & canvas) 
+inline void from_json(const nlohmann::json& j, shared_ptr<ICanvas> & canvas)
 {
+    const auto requestedCanvasId = j.value("id", int64_t(-1));
+    const bool autoAssignCanvasId = requestedCanvasId < 0;
+    const auto canvasName = j.value(
+        "name",
+        autoAssignCanvasId
+            ? string("New canvas")
+            : str_snprintf("Canvas %u", 32, static_cast<uint32_t>(requestedCanvasId))
+    );
+
     // Create canvas with required fields.
     canvas = make_shared<Canvas>(
-        j.at("name").get<string>(),
+        canvasName,
         j.at("width").get<uint32_t>(),
         j.value("height", uint32_t(1))
     );
 
-    // Optional id if provided manually
-    if (j.contains("id"))
-        canvas->SetId(j.at("id").get<uint32_t>());
+    if (!autoAssignCanvasId)
+        canvas->SetId(static_cast<uint32_t>(requestedCanvasId));
 
     // Features()
     for (const auto& featureJson : j.value("features", nlohmann::json::array()))
         canvas->AddFeature(featureJson.get<shared_ptr<ILEDFeature>>());
 
-    // Optional EffectsManager
-    if (j.contains("effectsManager")) 
+    // Validate and deserialize EffectsManager
+    if (j.contains("effectsManager"))
         from_json(j.at("effectsManager"), canvas->Effects());
 }

@@ -541,7 +541,7 @@ inline void from_json(const nlohmann::json &j, unique_ptr<Controller> & ptrContr
         // Create controller
         ptrController = make_unique<Controller>(port);
 
-        // Extract canvases (optional)
+        // Extract canvases
         for (const auto &canvasJson : j.value("canvases", nlohmann::json::array()))
             ptrController->AddCanvas(canvasJson.get<shared_ptr<ICanvas>>());
     } 
