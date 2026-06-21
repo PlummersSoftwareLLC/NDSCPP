@@ -27,7 +27,7 @@ public:
         float guess = x / 2.0f;
         float result = (guess + x / guess) / 2.0f;
 
-        while ((result - guess) > epsilon || (result - guess) < -epsilon) 
+        while ((result - guess) > epsilon || (result - guess) < -epsilon)
         {
             guess = result;
             result = (guess + x / guess) / 2.0f;
@@ -52,62 +52,30 @@ public:
 
     static vector<uint8_t> ConvertPixelsToByteArray(const vector<CRGB> &pixels, bool reversed, bool redGreenSwap)
     {
-        vector<uint8_t> byteArray(pixels.size() * 3); // Allocate space upfront
-
-        // This code makes all kinds of assumptions that CRGB is three RGB bytes, so let's assert that fact
         static_assert(sizeof(CRGB) == 3);
+
+        vector<uint8_t> byteArray(pixels.size() * sizeof(CRGB));
 
         if (!reversed && !redGreenSwap)
         {
-            memcpy(byteArray.data(), pixels.data(), pixels.size() * 3);
+            memcpy(byteArray.data(), pixels.data(), pixels.size() * sizeof(CRGB));
             return byteArray;
         }
 
         size_t index = 0;
+        auto writePixel = [&](const CRGB &pixel)
+        {
+            byteArray[index++] = redGreenSwap ? pixel.g : pixel.r;
+            byteArray[index++] = redGreenSwap ? pixel.r : pixel.g;
+            byteArray[index++] = pixel.b;
+        };
+
         if (reversed)
-        {
-            if (redGreenSwap)
-            {
-                for (auto it = pixels.rbegin(); it != pixels.rend(); ++it)
-                {
-                    byteArray[index++] = it->g;
-                    byteArray[index++] = it->r;
-                    byteArray[index++] = it->b;
-                }
-            }
-            else
-            {
-                for (auto it = pixels.rbegin(); it != pixels.rend(); ++it)
-                {
-                    byteArray[index++] = it->r;
-                    byteArray[index++] = it->g;
-                    byteArray[index++] = it->b;
-                }
-            }
-        }
-        else
-        {
-            if (redGreenSwap)
-            {
-                for (const auto &pixel : pixels)
-                {
-                    byteArray[index++] = pixel.g;
-                    byteArray[index++] = pixel.r;
-                    byteArray[index++] = pixel.b;
-                }
-            }
-            else
-            {
-                // This case is actually covered by the memcpy above, but kept for completeness
-                // or if memcpy is somehow not preferred.
-                for (const auto &pixel : pixels)
-                {
-                    byteArray[index++] = pixel.r;
-                    byteArray[index++] = pixel.g;
-                    byteArray[index++] = pixel.b;
-                }
-            }
-        }
+            for (auto it = pixels.rbegin(); it != pixels.rend(); ++it)
+                writePixel(*it);
+        else 
+            for (const auto &pixel : pixels)
+                writePixel(pixel);
 
         return byteArray;
     }

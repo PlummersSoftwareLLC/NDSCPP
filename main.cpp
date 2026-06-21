@@ -46,21 +46,21 @@ shared_ptr<spdlog::logger> logger = spdlog::stdout_color_mt("console");
 
 int main(int argc, char *argv[])
 {
-    logger->set_level(spdlog::level::debug);
+    logger->set_level(spdlog::level::info);
 
     uint16_t port = 7777;
     string   filename = "config.led";
 
     // Parse command-line options
     int opt;
-    while ((opt = getopt(argc, argv, "p:c:")) != -1) 
+    while ((opt = getopt(argc, argv, "p:c:")) != -1)
     {
-        switch (opt) 
+        switch (opt)
         {
-            case 'p': 
+            case 'p':
             {
                 int parsedPort = atoi(optarg);
-                if (parsedPort < 1 || parsedPort > 65535) 
+                if (parsedPort < 1 || parsedPort > 65535)
                 {
                     logger->error("Error: Port number must be between 1 and 65535, but was {}", parsedPort);
                     return EXIT_FAILURE;
@@ -87,8 +87,8 @@ int main(int argc, char *argv[])
         ptrController->LoadSampleCanvases();
     #else
         unique_ptr<Controller> ptrController = Controller::CreateFromFile(filename);
-    #endif    
-    
+    #endif
+
     ptrController->SetPort(port);
     ptrController->Connect();
     ptrController->Start(true); // Consider if effect managers want to run
