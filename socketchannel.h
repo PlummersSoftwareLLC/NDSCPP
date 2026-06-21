@@ -258,6 +258,7 @@ class SocketChannel : public ISocketChannel
     SpeedTracker _speedTracker;
 
     uint32_t _reconnectCount;
+    system_clock::time_point _lastInvalidByteWarning;
 
     queue<vector<uint8_t>> _frameQueue;
     size_t _totalQueuedBytes;  // Track total memory usage
@@ -276,7 +277,8 @@ public:
           _lastClientResponse(),
           _lastConnectionAttempt(system_clock::now()),
           _reconnectCount(0),
-          _totalQueuedBytes(0)
+          _totalQueuedBytes(0),
+          _lastInvalidByteWarning(system_clock::now() - 60s)
     {
     }
 
@@ -409,7 +411,7 @@ bool EnqueueFrame(vector<uint8_t>&& frameData) override
 
     if (isQueueFull)
     {
-        logger->warn("Queue is full at {} [{}] dropping frame and resetting socket", _hostName, _friendlyName);
+        logger->debug("Queue is full at {} [{}] dropping frame and resetting socket", _hostName, _friendlyName);
         CloseSocket();
         EmptyQueue();
         return false;
@@ -530,10 +532,16 @@ private:
                     continue;
                 }
 
-                // If it's not a known size, the stream is truly desynced.
-                logger->warn("Invalid byte count {} reading response from {} [{}]. Resetting socket.", byteCount, _hostName, _friendlyName);
-                CloseSocket();
-                return nullopt;
+                auto now = system_clock::now();
+                if (duration_cast<seconds>(now - _lastInvalidByteWarning).count() >= 30)
+                {
+                    logger->warn("Invalid byte count ({}) reading response from {} [{}]", byteCount, _hostName, _friendlyName);
+                    _lastInvalidByteWarning = now;
+                }
+                // Invalid byte count; eat the contents
+                vector<uint8_t> tempBuffer(byteCount);
+                recv(_socketFd, tempBuffer.data(), byteCount, 0);
+                continue;  // Check for more data
             }
 
             // Read the full response
@@ -607,7 +615,7 @@ private:
     {
         if (_socketFd == -1 && !ConnectSocket())
         {
-            logger->warn("Could not connect to {} [{}] in SendFrame", _hostName, _friendlyName);
+            logger->debug("Could not connect to {} [{}] in SendFrame", _hostName, _friendlyName);
             lock_guard lock(_mutex);
             _isConnected = false;
             return;
@@ -697,7 +705,7 @@ private:
         {
             if (errno != EINPROGRESS)
             {
-                logger->warn("Could not connect to {} [{}] errno={}", _hostName, _friendlyName, errno);
+                logger->debug("Could not connect to {} [{}] errno={}", _hostName, _friendlyName, errno);
                 close(tempSocket);
                 return false;
             }
@@ -709,7 +717,7 @@ private:
             
             if (poll(&pfd, 1, kConnectTimeout.count()) <= 0)
             {
-                logger->warn("Connection timeout to {} [{}]", _hostName, _friendlyName);
+                logger->debug("Connection timeout to {} [{}]", _hostName, _friendlyName);
                 close(tempSocket);
                 return false;
             }

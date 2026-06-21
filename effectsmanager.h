@@ -362,6 +362,7 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
 {
         jsonPair<BouncingBallEffect>(),
         jsonPair<ColorWaveEffect>(),
+        jsonPair<DaveDebugEffect>(),
         jsonPair<FireworksEffect>(),
         jsonPair<SolidColorFill>(),
         jsonPair<PaletteEffect>(),
@@ -424,10 +425,14 @@ inline void from_json(const nlohmann::json &j, shared_ptr<ILEDEffect> & effect)
 
 inline void to_json(nlohmann::json &j, const IEffectsManager &manager)
 {
+    const auto currentEffectIndex = manager.EffectCount() == 0
+        ? -1
+        : static_cast<int>(manager.GetCurrentEffect());
+
     j = 
     {
         {"fps", manager.GetFPS()},
-        {"currentEffectIndex", manager.GetCurrentEffect()},
+        {"currentEffectIndex", currentEffectIndex},
         {"running", manager.IsRunning()}
     };
         
@@ -440,8 +445,12 @@ inline void to_json(nlohmann::json &j, const IEffectsManager &manager)
 inline void from_json(const nlohmann::json &j, IEffectsManager &manager)
 {
     manager.SetFPS(j.value("fps", uint16_t(30)));
-    manager.SetEffects(j.value("effects", vector<shared_ptr<ILEDEffect>>()));
+
+    if (j.contains("effects"))
+        manager.SetEffects(j.at("effects").get<vector<shared_ptr<ILEDEffect>>>());
+
     manager.SetCurrentEffectIndex(j.value("currentEffectIndex", -1));
+
 
     // We deserialize the running state to a running *preference*. Directly starting the manager after
     // deserialization could create problems, and without having the canvas we can't start it anyway.

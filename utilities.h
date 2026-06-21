@@ -14,7 +14,6 @@ using namespace std;
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <initializer_list>
 #include <zlib.h>
 #include "pixeltypes.h"
 
@@ -27,7 +26,7 @@ public:
         float guess = x / 2.0f;
         float result = (guess + x / guess) / 2.0f;
 
-        while ((result - guess) > epsilon || (result - guess) < -epsilon) 
+        while ((result - guess) > epsilon || (result - guess) < -epsilon)
         {
             guess = result;
             result = (guess + x / guess) / 2.0f;
