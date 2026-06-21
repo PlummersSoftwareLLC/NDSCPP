@@ -64,6 +64,7 @@ public:
 
     vector<shared_ptr<ILEDEffect>> Effects() const override
     {
+        lock_guard lock(_effectsMutex);
         return _effects;
     }
 
@@ -187,9 +188,10 @@ public:
 
         _workerThread = thread([this, &canvas]()
         {
-            const auto frameDurationNs = nanoseconds(1000000000LL / _fps); 
-            const auto startTimeSteady = steady_clock::now();
-            const auto startTimeSystem = system_clock::now();
+            const auto frameDurationNs = nanoseconds(1000000000LL / _fps);
+            // next two non-const because we may need to reset them if we fall behind
+            auto startTimeSteady = steady_clock::now();
+            auto startTimeSystem = system_clock::now();
 
             auto lastFrameTimeSteady = startTimeSteady;
             auto lastHeartbeatTime = startTimeSteady;
@@ -205,7 +207,7 @@ public:
             {
                 auto now = steady_clock::now();
 
-                // When an effect is active, we check every frame. 
+                // When an effect is active, we check every frame.
                 // When no effect is active, we check every 500ms to save CPU.
                 bool shouldCheckSchedule = _lastScheduleState || (now - lastScheduleCheck >= 500ms);
 
@@ -235,7 +237,7 @@ public:
                 auto nextFrameTimeSteady = startTimeSteady + (frameDurationNs * frameCount);
                 auto packetTimestamp = startTimeSystem + (frameDurationNs * frameCount);
 
-                if (activeIndex != -1) 
+                if (activeIndex != -1)
                 {
                     if (activeIndex != _currentEffectIndex)
                     {
@@ -257,8 +259,8 @@ public:
                     }
                     _lastScheduleState = true;
                     lastHeartbeatTime = now;
-                } 
-                else 
+                }
+                else
                 {
                     if (_lastScheduleState || (now - lastHeartbeatTime) >= 2s) {
                         {
@@ -269,15 +271,15 @@ public:
                         {
                             feature->Socket()->EnqueueFrame(feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp)));
                         }
-                        
+
                         if (_lastScheduleState)
                             logger->info("No scheduled effects are active for canvas '{}'. Sending heartbeats.", canvas.Name());
-                        
+
                         _lastScheduleState = false;
                         lastHeartbeatTime = now;
                     }
                 }
-                
+
                 lastFrameTimeSteady = now;
 
                 // Drift detection and re-sync
@@ -286,20 +288,21 @@ public:
                 if (abs(drift) > 200000) // 200ms in microseconds
                 {
                     logger->debug("Canvas '{}' clock drift detected: {}us. Re-syncing.", canvas.Name(), drift);
-                    // To re-sync, we'd need to adjust startTimeSystem or frameCount, 
+                    // To re-sync, we'd need to adjust startTimeSystem or frameCount,
                     // but for now we just log it as it should be much rarer now.
                 }
 
                 if (nextFrameTimeSteady < now - 1s) // Sane reset
                 {
-                    logger->warn("Canvas '{}' fell behind, resetting clock.", canvas.Name());
-                    // Reset to now
-                    return; // Re-entry will handle restart (or we could just reset variables here)
+                    logger->warn("Canvas '{}' fell behind by >1s, resetting frame clock.", canvas.Name());
+                    frameCount = 0;
+                    startTimeSteady = now;
+                    startTimeSystem = system_clock::now();
                 }
 
                 if (nextFrameTimeSteady > now)
                     this_thread::sleep_until(nextFrameTimeSteady);
-            } 
+            }
  });
     }
 
@@ -318,7 +321,7 @@ public:
     {
         lock_guard lock(_effectsMutex);
         _effects = std::move(effects);
-        
+
         if (_currentEffectIndex == -1 && !_effects.empty())
             _currentEffectIndex = 0;
     }
@@ -383,7 +386,7 @@ inline void to_json(nlohmann::json &j, const ILEDEffect &effect)
         type = typeid(effect).name();
         it = to_from_json_map.find(type);
     }
-    
+
     if (it == to_from_json_map.end())
     {
         logger->error("Unknown effect type for serialization: {}", type);
@@ -429,13 +432,13 @@ inline void to_json(nlohmann::json &j, const IEffectsManager &manager)
         ? -1
         : static_cast<int>(manager.GetCurrentEffect());
 
-    j = 
+    j =
     {
         {"fps", manager.GetFPS()},
         {"currentEffectIndex", currentEffectIndex},
         {"running", manager.IsRunning()}
     };
-        
+
     for (const auto &effect : manager.Effects())
         j["effects"].push_back(*effect);
 };
