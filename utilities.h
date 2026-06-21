@@ -51,49 +51,30 @@ public:
 
     static vector<uint8_t> ConvertPixelsToByteArray(const vector<CRGB> &pixels, bool reversed, bool redGreenSwap)
     {
-        vector<uint8_t> byteArray(pixels.size() * 3); // Allocate space upfront
-
-        // This code makes all kinds of assumptions that CRGB is three RGB bytes, so let's assert that fact
         static_assert(sizeof(CRGB) == 3);
 
+        vector<uint8_t> byteArray(pixels.size() * sizeof(CRGB));
+
+        if (!reversed && !redGreenSwap)
+        {
+            memcpy(byteArray.data(), pixels.data(), pixels.size() * sizeof(CRGB));
+            return byteArray;
+        }
+
         size_t index = 0;
+        auto writePixel = [&](const CRGB &pixel)
+        {
+            byteArray[index++] = redGreenSwap ? pixel.g : pixel.r;
+            byteArray[index++] = redGreenSwap ? pixel.r : pixel.g;
+            byteArray[index++] = pixel.b;
+        };
 
         if (reversed)
-        {
             for (auto it = pixels.rbegin(); it != pixels.rend(); ++it)
-            {
-                if (redGreenSwap)
-                {
-                    byteArray[index++] = it->g;
-                    byteArray[index++] = it->r;
-                    byteArray[index++] = it->b;
-                }
-                else
-                {
-                    byteArray[index++] = it->r;
-                    byteArray[index++] = it->g;
-                    byteArray[index++] = it->b;
-                }
-            }
-        }
-        else
-        {
+                writePixel(*it);
+        else 
             for (const auto &pixel : pixels)
-            {
-                if (redGreenSwap)
-                {
-                    byteArray[index++] = pixel.g;
-                    byteArray[index++] = pixel.r;
-                    byteArray[index++] = pixel.b;
-                }
-                else
-                {
-                    byteArray[index++] = pixel.r;
-                    byteArray[index++] = pixel.g;
-                    byteArray[index++] = pixel.b;
-                }
-            }
-        }
+                writePixel(pixel);
 
         return byteArray;
     }

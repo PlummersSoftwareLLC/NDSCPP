@@ -1,14 +1,6 @@
 // Main.cpp
 //
 // This file is the main entry point for the NDSCPP LED Matrix Server application.
-// It creates a Canvas, adds a GreenFillEffect to it, and then enters a loop where it
-// renders the effect to the canvas, compresses the data, and sends it to the LED
-// matrix via a SocketChannel.  The program will continue to run until it receives
-// a SIGINT signal (Ctrl-C).
-
-// Main.cpp
-//
-// This file is the main entry point for the NDSCPP LED Matrix Server application.
 // It creates a number of Canvases and adds an effect to each, after which they enter
 // a loop where it renders the effect to the canvas, compresses the data, and sends
 // it to the relevant LED controller via a SocketChannel.  The program will continue
@@ -122,6 +114,7 @@ int main(int argc, char *argv[])
 
     signal(SIGINT, HandleSignal);
     signal(SIGTERM, HandleSignal);
+
 
     ptrController->Connect();
     ptrController->Start(true); // Consider if effect managers want to run
