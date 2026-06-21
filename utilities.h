@@ -14,7 +14,6 @@ using namespace std;
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <initializer_list>
 #include <zlib.h>
 #include "pixeltypes.h"
 

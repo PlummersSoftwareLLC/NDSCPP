@@ -1349,7 +1349,7 @@ inline void to_json(nlohmann::json& j, const CRGB& color)
     };
 }
 
-inline void from_json(const nlohmann::json& j, CRGB& color) 
+inline void from_json(const nlohmann::json& j, CRGB& color)
 {
     if (j.is_string()) {
         string s = j.get<string>();

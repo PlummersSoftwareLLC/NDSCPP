@@ -1,7 +1,7 @@
 #pragma once
 
 // Interfaces
-// 
+//
 // This file contains the interfaces for the various classes in the project.  The interfaces
 // are used to define the methods that must be implemented by the classes that use them.  This
 // allows the classes to be decoupled from each other, and allows for easier testing and
@@ -18,12 +18,12 @@
 using namespace std;
 using namespace chrono;
 
-// ILEDGraphics 
+// ILEDGraphics
 //
 // Represents a 2D drawing surface that can be used to render pixel data.  Provides methods for
 // setting and getting pixel values, drawing shapes, and clearing the surface.
 
-class ILEDGraphics 
+class ILEDGraphics
 {
 public:
     virtual ~ILEDGraphics() = default;
@@ -48,13 +48,13 @@ public:
 //
 // Represents a class that determine whether the effect involved can/should be run at the current time
 
-class ISchedule 
+class ISchedule
 {
 public:
 
     // Days of week as a bitmask using powers of 2.
 
-    enum DayOfWeek : uint8_t 
+    enum DayOfWeek : uint8_t
     {
         Sunday    = 0x01,  // 1
         Monday    = 0x02,  // 2
@@ -96,7 +96,7 @@ class ICanvas;
 
 // ILEDEffect
 //
-// Defines lifecycle hooks (`Start` and `Update`) for applying visual effects on LED canvases.  
+// Defines lifecycle hooks (`Start` and `Update`) for applying visual effects on LED canvases.
 
 class ILEDEffect
 {
@@ -106,11 +106,14 @@ public:
     // Get the name of the effect
     virtual const string& Name() const = 0;
 
+    // Get the type of the effect
+    virtual string Type() const = 0;
+
     // Called when the effect starts
     virtual void Start(ICanvas& canvas) = 0;
 
     // Called to update the effect, given a canvas and timestamp
-    virtual void Update(ICanvas& canvas, milliseconds deltaTime) = 0;
+    virtual void Update(ICanvas& canvas, microseconds deltaTime) = 0;
 
     virtual void SetSchedule(const shared_ptr<ISchedule> pSchedule) = 0;
     virtual const shared_ptr<ISchedule> GetSchedule() const = 0;
@@ -125,7 +128,7 @@ class IEffectsManager
 {
 public:
     virtual ~IEffectsManager() = default;
-    
+
     virtual void AddEffect(shared_ptr<ILEDEffect> effect) = 0;
     virtual void RemoveEffect(shared_ptr<ILEDEffect> & effect) = 0;
     virtual void StartCurrentEffect(ICanvas& canvas) = 0;
@@ -133,7 +136,7 @@ public:
     virtual size_t GetCurrentEffect() const = 0;
     virtual size_t EffectCount() const = 0;
     virtual vector<shared_ptr<ILEDEffect>> Effects() const = 0;
-    virtual void UpdateCurrentEffect(ICanvas& canvas, milliseconds millisDelta) = 0;
+    virtual void UpdateCurrentEffect(ICanvas& canvas, microseconds microsDelta) = 0;
     virtual void NextEffect() = 0;
     virtual void PreviousEffect() = 0;
     virtual string CurrentEffectName() const = 0;
@@ -146,12 +149,12 @@ public:
     virtual void SetFPS(uint16_t fps) = 0;
     virtual uint16_t GetFPS() const = 0;
     virtual void SetEffects(vector<shared_ptr<ILEDEffect>> effects) = 0;
-    virtual void SetCurrentEffectIndex(int index) = 0;    
+    virtual void SetCurrentEffectIndex(int index) = 0;
 };
 
 // ISocketChannel
 //
-// Defines a communication protocol for managing socket connections and sending data to a server.  
+// Defines a communication protocol for managing socket connections and sending data to a server.
 // Provides methods for enqueuing frames, retrieving connection status, and tracking performance metrics.
 
 class ISocketChannel
@@ -185,15 +188,16 @@ public:
 
 // ILEDFeature
 //
-// Represents a 2D collection of LEDs with positioning, rendering, and configuration capabilities.  
+// Represents a 2D collection of LEDs with positioning, rendering, and configuration capabilities.
 // Provides APIs for interacting with its parent canvas and retrieving its assigned color data.
 
-class ILEDFeature 
+class ILEDFeature
 {
 public:
     virtual ~ILEDFeature() = default;
 
     virtual uint32_t Id() const = 0;
+    virtual uint32_t SetId(uint32_t id) = 0;
 
     // Accessor methods
     virtual uint32_t Width() const = 0;
@@ -211,7 +215,7 @@ public:
 
     // Data retrieval
     virtual vector<uint8_t> GetPixelData() const = 0;
-    virtual vector<uint8_t> GetDataFrame() const = 0;    
+    virtual vector<uint8_t> GetDataFrame(system_clock::time_point targetTime) const = 0;
 
     virtual shared_ptr<ISocketChannel> Socket() = 0;
     virtual const shared_ptr<ISocketChannel> Socket() const = 0;
@@ -220,14 +224,14 @@ public:
 
 // ICanvas
 //
-// Represents a 2D drawing surface that manages LED features and provides rendering capabilities.  
+// Represents a 2D drawing surface that manages LED features and provides rendering capabilities.
 // Can contain multiple `ILEDFeature` instances, with features mapped to specific regions of the canvas
 
-class ICanvas 
+class ICanvas
 {
 public:
     virtual ~ICanvas() = default;
-    
+
     virtual uint32_t Id() const = 0;
     virtual uint32_t SetId(uint32_t id) = 0;
     virtual string Name() const = 0;
@@ -263,6 +267,7 @@ public:
     virtual vector<shared_ptr<ICanvas>> Canvases() const = 0;
     virtual uint32_t AddCanvas(shared_ptr<ICanvas> ptrCanvas) = 0;
     virtual bool DeleteCanvasById(uint32_t id) = 0;
+    virtual void ClearAllCanvases() = 0;
     virtual bool UpdateCanvas(shared_ptr<ICanvas> ptrCanvas) = 0;
     virtual bool AddFeatureToCanvas(uint16_t canvasId, shared_ptr<ILEDFeature> feature) = 0;
     virtual void RemoveFeatureFromCanvas(uint16_t canvasId, uint16_t featureId) = 0;

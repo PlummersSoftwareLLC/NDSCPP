@@ -2,6 +2,8 @@
 #include <ncursesw/ncurses.h>
 #include <locale.h>
 #include <curl/curl.h>
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <thread>
 #include <sstream>
@@ -45,10 +47,10 @@ inline std::string buildMeter(double value, double threshold, int width = 21)
     return meter;
 }
 
-inline std::wstring buildProgressBar(double value, double maximum, int width = 10) 
+inline std::string buildProgressBar(double value, double maximum, int width = 10)
 {
-    static const std::array<const wchar_t, 9> blocks = {
-        L' ', L'▏', L'▎', L'▍', L'▌', L'▋', L'▊', L'▉', L'█'
+    static const std::array<const char *, 9> blocks = {
+        " ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"
     };
     
     double percentage = std::min(1.0, std::max(0.0, value / maximum));
@@ -56,13 +58,16 @@ inline std::wstring buildProgressBar(double value, double maximum, int width = 1
     int fullBlocks = static_cast<int>(exactBlocks);
     int remainder = static_cast<int>((exactBlocks - fullBlocks) * 8);
     
-    std::wstring bar;
-    bar.reserve(width); // wstring::reserve() reserves characters, not bytes
-    bar.append(fullBlocks, blocks[8]);
+    std::string bar;
+    bar.reserve(static_cast<size_t>(width) * 3); // Block glyphs are multi-byte in UTF-8.
+
+    for (int i = 0; i < fullBlocks; ++i)
+        bar += blocks[8];
     
     if (fullBlocks < width) {
         bar += blocks[remainder];
-        bar.append(width - fullBlocks - 1, blocks[0]);
+        for (int i = 0; i < width - fullBlocks - 1; ++i)
+            bar += blocks[0];
     }
     
     return bar;
@@ -203,7 +208,7 @@ public:
         werase(footerWin);
         box(footerWin, 0, 0);
         mvwaddstr(footerWin, 0, 2, " Controls ");
-        mvwaddwstr(footerWin, 1, 2, L"Q:Quit  ↑/↓:Scroll  R:Refresh");
+        mvwaddstr(footerWin, 1, 2, "Q:Quit  ↑/↓:Scroll  R:Refresh");
         wrefresh(footerWin);
     }
 
@@ -251,7 +256,7 @@ public:
             }
             
             // Small sleep to prevent CPU spinning
-            std::this_thread::sleep_for(milliseconds(_fps > 0 ? static_cast<int>(1000.0 / _fps) : 100));
+            std::this_thread::sleep_for(microseconds(_fps > 0 ? static_cast<long long>(1000000.0 / _fps) : 100000LL));
         }
     }
 };
