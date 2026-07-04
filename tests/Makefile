@@ -6,7 +6,7 @@ SYSTEM_INCLUDES =
 LDFLAGS =
 
 # Libraries needed
-LIBS = -lgtest_main -lgtest -lcpr -lcurl -lpthread
+LIBS = -lgtest_main -lgtest -lcpr -lcurl -lpthread -lz -lfmt
 
 # Binary name
 TARGET = tests
