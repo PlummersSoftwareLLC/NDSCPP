@@ -305,15 +305,57 @@ file-by-file in the naive sense. The approach used instead:
 | Step | File | Status |
 | --- | --- | --- |
 | 1–3 | Branch + merge started + placeholder commit | ✅ done |
-| A | `interfaces.h` | ⬜ not started |
-| B | `ledfeature.h` | ⬜ not started |
-| C | `socketchannel.h` | ⬜ not started |
+| A | `interfaces.h` | ✅ done (combined with C, see note below) |
+| B | `ledfeature.h` | ✅ done |
+| C | `socketchannel.h` | ✅ done (combined with A, see note below) |
 | D | `effectsmanager.h` | ⬜ deferred (separate session) |
 
 Branch: `merge/pr-126-v2`, based on `main` @ `77b2bf7`, merging in `v2`
 @ `ba3f726`. Each completed step is its own commit on this branch — check
-`git log merge/pr-126-v2` to see exactly which resolutions have landed and
-resume from the first unchecked step above.
+`git log merge/pr-126-v2` to see exactly which resolutions have landed.
+`effectsmanager.h` (Step D) is the only remaining work; resume there.
+
+### Notes from executing Steps 1–3, A, B, C
+
+Two things came up during execution that are worth recording so a future
+session doesn't have to rediscover them:
+
+1. **`git checkout --ours <file>` is not a safe placeholder for "resolve
+   conflicts to main's side."** It replaces a conflicted file's entire
+   working-tree content with `main`'s version of the whole file — including
+   hunks that `v2` changed *without* conflicting with `main` (i.e. hunks
+   git's real 3-way merge would have taken from `v2` automatically). This
+   silently dropped, from the initial placeholder commit: `ledfeature.h`'s
+   per-row reversed-pixel fix in the slow path, `interfaces.h`'s
+   `GetFailedConnectCount()`/`GetLastSocketError()` declarations, and
+   `socketchannel.h`'s entire `RecordConnectFailure`/`RecordConnectSuccess`
+   diagnostics feature. All of these were recovered while doing Steps A–C
+   by reconstructing the actual 3-way merge per file (`git merge-file -p
+   <ours> <merge-base> <theirs>`) and resolving only the real conflict
+   markers within it, rather than resolving from the `--ours` placeholder.
+   **If resuming for Step D (`effectsmanager.h`), do the same** — don't
+   hand-edit from the current placeholder; regenerate the true 3-way merge
+   for that file first, since it likely has the same problem (any
+   non-conflicting `v2` insertions in `effectsmanager.h` were also wiped by
+   the placeholder step).
+2. **Steps A (`interfaces.h`) and C (`socketchannel.h`) turned out to be
+   compilation-coupled**, not independent: `interfaces.h`'s new
+   `ISocketChannel` pure virtuals (`GetFailedConnectCount`/
+   `GetLastSocketError`) require `socketchannel.h` to implement them or
+   `SocketChannel` becomes an abstract, uninstantiable class. They landed
+   in one commit together. `ledfeature.h` (Step B) also consumes those two
+   new methods (in its `to_json`), but its own core resolution (the
+   fast-path guard and `TimeOffset()` decision) doesn't depend on them, so
+   it stayed a separate commit, applied after A+C.
+3. **Two incidental, merge-induced build breaks were fixed along the way**
+   (separate commit, before A/B/C): `effects/stockbannereffect.h`'s and
+   `tests/tests.cpp`'s `Update`/`UpdateCurrentEffect` overrides used
+   `milliseconds` to match `v2`'s own (now-superseded) interface, and
+   needed retyping to `microseconds` to match `main`'s interface — both
+   parameters are unused, so this is behavior-neutral. A third,
+   pre-existing and unrelated `-Wreorder` bug on `main` itself (in
+   `socketchannel.h`'s constructor initializer list) was also fixed there,
+   since it blocked the `-Werror` test build entirely.
 
 ## Question to send to the PR author
 
