@@ -728,7 +728,7 @@ public:
         RebuildStrip(canvas.Graphics().Width(), canvas.Graphics().Height());
     }
 
-    void Update(ICanvas& canvas, milliseconds deltaTime) override
+    void Update(ICanvas& canvas, microseconds deltaTime) override
     {
         (void) deltaTime;
 

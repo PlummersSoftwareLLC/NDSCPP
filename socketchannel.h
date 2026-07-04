@@ -277,8 +277,8 @@ public:
           _lastClientResponse(),
           _lastConnectionAttempt(system_clock::now()),
           _reconnectCount(0),
-          _totalQueuedBytes(0),
-          _lastInvalidByteWarning(system_clock::now() - 60s)
+          _lastInvalidByteWarning(system_clock::now() - 60s),
+          _totalQueuedBytes(0)
     {
     }
 

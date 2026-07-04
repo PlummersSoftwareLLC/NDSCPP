@@ -39,7 +39,7 @@ public:
     size_t GetCurrentEffect() const override { return 0; }
     size_t EffectCount() const override { return 0; }
     vector<shared_ptr<ILEDEffect>> Effects() const override { return {}; }
-    void UpdateCurrentEffect(ICanvas&, milliseconds) override {}
+    void UpdateCurrentEffect(ICanvas&, microseconds) override {}
     void NextEffect() override {}
     void PreviousEffect() override {}
     string CurrentEffectName() const override { return ""; }
