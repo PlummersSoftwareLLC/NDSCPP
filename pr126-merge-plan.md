@@ -357,7 +357,7 @@ session doesn't have to rediscover them:
    `socketchannel.h`'s constructor initializer list) was also fixed there,
    since it blocked the `-Werror` test build entirely.
 
-## Question to send to the PR author
+## Question sent to the PR author — answered
 
 In the `v2` branch, `EffectsManager::Start()` now computes one `displayTime`
 per frame by taking the **maximum** `TimeOffset()` across all of a canvas's
@@ -367,7 +367,10 @@ its *own* `TimeOffset()` individually, so two features with different
 `timeOffset` values on the same canvas would each get their own offset
 rather than both inheriting the largest one present.
 
-Was that change to a shared/max offset intentional (e.g. to keep all
-features on a canvas frame-synchronized), or an incidental side effect of
-restructuring the timing loop for accuracy? If it's intentional, is it meant
-to replace per-feature offsetting everywhere, or only in specific cases?
+**Author's answer (2026-07-05):** not a deliberate change — they don't
+recall doing it, and guess it may be an incidental side effect of
+vibe-coded visual work on the scrolling stock banner. Their guidance: take
+whatever the shortest path to resolving the merge is. This confirms the
+Step B resolution already applied in `ledfeature.h` (keep `main`'s
+per-feature `TimeOffset()` application, don't carry over `v2`'s shared/max
+offset) was the right call — no further changes needed on that front.
