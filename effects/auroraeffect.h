@@ -8,14 +8,17 @@ using namespace std;
 
 class AuroraEffect : public LEDEffectBase
 {
+public:
+    static constexpr const char* TypeName = "AuroraEffect";
+
 private:
     double _time;
     double _speed;
     double _brightness;
-    
+
 public:
     AuroraEffect(const string& name, double speed = 0.2, double brightness = 1.0)
-        : LEDEffectBase(name, "AuroraEffect"), _time(0.0), _speed(speed), _brightness(brightness)
+        : LEDEffectBase(name, TypeName), _time(0.0), _speed(speed), _brightness(brightness)
     {
     }
 

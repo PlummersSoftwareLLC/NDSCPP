@@ -12,6 +12,9 @@ using namespace std::chrono;
 
 class BouncingBallEffect : public LEDEffectBase
 {
+public:
+    static constexpr const char* TypeName = "BouncingBallEffect";
+
 private:
     size_t _ballCount;
     size_t _ballSize;
@@ -35,7 +38,7 @@ private:
 
 public:
     BouncingBallEffect(const string& name, size_t ballCount = 5, size_t ballSize = 1, bool mirrored = true, bool erase = true)
-        : LEDEffectBase(name), _ballCount(ballCount), _ballSize(ballSize), _mirrored(mirrored), _erase(erase)
+        : LEDEffectBase(name, TypeName), _ballCount(ballCount), _ballSize(ballSize), _mirrored(mirrored), _erase(erase)
     {
     }
 

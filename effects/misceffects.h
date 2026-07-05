@@ -12,12 +12,15 @@ using namespace std::chrono;
 
 class SolidColorFill : public LEDEffectBase
 {
+public:
+    static constexpr const char* TypeName = "SolidColorFill";
+
 private:
     CRGB _color;
 
 public:
     SolidColorFill(const string& name, const CRGB& color)
-        : LEDEffectBase(name), _color(color)
+        : LEDEffectBase(name, TypeName), _color(color)
     {
     }
 
@@ -53,8 +56,10 @@ inline void from_json(const nlohmann::json& j, shared_ptr<SolidColorFill>& effec
 class DaveDebugEffect : public LEDEffectBase
 {
 public:
+    static constexpr const char* TypeName = "DaveDebugEffect";
+
     DaveDebugEffect(const string& name)
-        : LEDEffectBase(name)
+        : LEDEffectBase(name, TypeName)
     {
     }
 

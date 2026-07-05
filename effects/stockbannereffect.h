@@ -30,6 +30,9 @@ using namespace std::chrono;
 
 class StockBanner : public LEDEffectBase
 {
+public:
+    static constexpr const char* TypeName = "StockBanner";
+
 private:
     struct Quote
     {
@@ -704,7 +707,7 @@ public:
                 uint32_t minQuoteWidth = 64,
                 uint32_t compactQuoteWidth = 96,
                 uint32_t refreshSeconds = 60)
-        : LEDEffectBase(name),
+        : LEDEffectBase(name, TypeName),
           _symbols(std::move(symbols)),
           _stockServerHost(std::move(stockServerHost)),
           _stockServerPort(stockServerPort),

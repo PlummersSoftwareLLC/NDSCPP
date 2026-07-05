@@ -322,7 +322,7 @@ public:
                 if (nextFrameTimeSteady > now)
                     this_thread::sleep_until(nextFrameTimeSteady);
             }
- });
+        });
     }
 
     // Stop the worker thread
@@ -375,7 +375,7 @@ pair<string, pair<EffectSerializer, EffectDeserializer>> jsonPair()
         return j.get<shared_ptr<T>>();
     };
 
-    return make_pair(typeid(T).name(), make_pair(serializer, deserializer));
+    return make_pair(string(T::TypeName), make_pair(serializer, deserializer));
 }
 
 // Map with effect (de)serialization functions
@@ -391,7 +391,7 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
         jsonPair<StarfieldEffect>(),
         jsonPair<StockBanner>(),
         jsonPair<MP4PlaybackEffect>(),
-        make_pair("AuroraEffect", jsonPair<AuroraEffect>().second)
+        jsonPair<AuroraEffect>()
 };
 
 // Dynamically serialize an effect to JSON based on its actual type
@@ -400,13 +400,6 @@ inline void to_json(nlohmann::json &j, const ILEDEffect &effect)
 {
     string type = effect.Type();
     auto it = to_from_json_map.find(type);
-    if (it == to_from_json_map.end())
-    {
-        // Fallback to mangled name for backward compatibility and unregistered types
-        type = typeid(effect).name();
-        it = to_from_json_map.find(type);
-    }
-
     if (it == to_from_json_map.end())
     {
         logger->error("Unknown effect type for serialization: {}", type);
@@ -427,10 +420,21 @@ inline void to_json(nlohmann::json &j, const ILEDEffect &effect)
 
 inline void from_json(const nlohmann::json &j, shared_ptr<ILEDEffect> & effect)
 {
-    auto it = to_from_json_map.find(j["type"]);
+    const string type = j.at("type").get<string>();
+    auto it = to_from_json_map.find(type);
     if (it == to_from_json_map.end())
     {
-        logger->error("Unknown effect type for deserialization: {}, replacing with magenta fill", j["type"].get<string>());
+        // Fallback for config files saved under the pre-refactor typeid-mangled names,
+        // which are a run of leading digits (the Itanium ABI's name-length prefix)
+        // followed by the plain class name, e.g. "15StarfieldEffect".
+        auto firstNonDigit = type.find_first_not_of("0123456789");
+        if (firstNonDigit != string::npos && firstNonDigit > 0)
+            it = to_from_json_map.find(type.substr(firstNonDigit));
+    }
+
+    if (it == to_from_json_map.end())
+    {
+        logger->error("Unknown effect type for deserialization: {}, replacing with magenta fill", type);
         effect = make_shared<SolidColorFill>("Unknown Effect Type", CRGB::Magenta);
         return;
     }
@@ -444,7 +448,7 @@ inline void from_json(const nlohmann::json &j, shared_ptr<ILEDEffect> & effect)
     }
 }
 
-// IEffectsManager <-- JSON
+// IEffectsManager --> JSON
 
 inline void to_json(nlohmann::json &j, const IEffectsManager &manager)
 {
@@ -463,7 +467,7 @@ inline void to_json(nlohmann::json &j, const IEffectsManager &manager)
         j["effects"].push_back(*effect);
 };
 
-// IEffectsManager --> JSON
+// IEffectsManager <-- JSON
 
 inline void from_json(const nlohmann::json &j, IEffectsManager &manager)
 {
