@@ -308,12 +308,22 @@ file-by-file in the naive sense. The approach used instead:
 | A | `interfaces.h` | ✅ done (combined with C, see note below) |
 | B | `ledfeature.h` | ✅ done |
 | C | `socketchannel.h` | ✅ done (combined with A, see note below) |
-| D | `effectsmanager.h` | ⬜ deferred (separate session) |
+| D | `effectsmanager.h` | ✅ done |
+
+All 4 conflicting files are resolved. `make` and `make -C tests` pass, all
+14 tests pass (including `ReversedMatrixFeatureMirrorsRowsForHardware`).
+The PR author confirmed (2026-07-05) the `TimeOffset` question above wasn't
+an intentional design decision, which validates the Step B/D resolution to
+keep `main`'s per-feature offsetting.
 
 Branch: `merge/pr-126-v2`, based on `main` @ `77b2bf7`, merging in `v2`
-@ `ba3f726`. Each completed step is its own commit on this branch — check
-`git log merge/pr-126-v2` to see exactly which resolutions have landed.
-`effectsmanager.h` (Step D) is the only remaining work; resume there.
+@ `ba3f726`. Each completed step is its own commit — see `git log
+merge/pr-126-v2`.
+
+**Remaining before this is ready to land**, per the execution plan above:
+manual smoke test (multi-row reversed feature + differing per-feature
+`timeOffset` values, run visually against real or simulated hardware) and
+a final read-through of the assembled diff. No code conflicts remain.
 
 ### Notes from executing Steps 1–3, A, B, C
 
