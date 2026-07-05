@@ -7,6 +7,7 @@ using namespace chrono;
 #include "effects/misceffects.h"
 #include "effects/paletteeffect.h"
 #include "effects/starfield.h"
+#include "effects/stockbannereffect.h"
 #include "effects/videoeffect.h"
 #include "effects/bouncingballeffect.h"
 #include "effects/auroraeffect.h"
@@ -18,6 +19,7 @@ using namespace chrono;
 // can also be used to clear all effects.
 
 #include "interfaces.h"
+#include <algorithm>
 #include <vector>
 #include <mutex>
 
@@ -188,7 +190,11 @@ public:
 
         _workerThread = thread([this, &canvas]()
         {
-            const auto frameDurationNs = nanoseconds(1000000000LL / _fps);
+            const auto effectiveFps = max<uint16_t>(1, _fps);
+            // Computed via a double-precision intermediate rather than truncating
+            // nanoseconds(1'000'000'000LL / fps) up front, so FPS values that don't
+            // divide evenly into a second don't bias the frame clock low every frame.
+            const auto frameDuration = duration_cast<steady_clock::duration>(duration<double>(1.0 / effectiveFps));
             // next two non-const because we may need to reset them if we fall behind
             auto startTimeSteady = steady_clock::now();
             auto startTimeSystem = system_clock::now();
@@ -234,8 +240,8 @@ public:
 
                 // Calculate the actual target timestamp for this packet based on the wall clock
                 frameCount++;
-                auto nextFrameTimeSteady = startTimeSteady + (frameDurationNs * frameCount);
-                auto packetTimestamp = startTimeSystem + (frameDurationNs * frameCount);
+                auto nextFrameTimeSteady = startTimeSteady + (frameDuration * frameCount);
+                auto packetTimestamp = startTimeSystem + duration_cast<system_clock::duration>(frameDuration * frameCount);
 
                 if (activeIndex != -1)
                 {
@@ -255,7 +261,8 @@ public:
 
                     for (const auto &feature : canvas.Features())
                     {
-                        feature->Socket()->EnqueueFrame(feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp)));
+                        auto frame = feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp));
+                        feature->Socket()->EnqueueFrame(feature->Socket()->CompressFrame(frame));
                     }
                     _lastScheduleState = true;
                     lastHeartbeatTime = now;
@@ -269,7 +276,8 @@ public:
                         }
                         for (const auto &feature : canvas.Features())
                         {
-                            feature->Socket()->EnqueueFrame(feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp)));
+                            auto frame = feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp));
+                            feature->Socket()->EnqueueFrame(feature->Socket()->CompressFrame(frame));
                         }
 
                         if (_lastScheduleState)
@@ -290,6 +298,17 @@ public:
                     logger->debug("Canvas '{}' clock drift detected: {}us. Re-syncing.", canvas.Name(), drift);
                     // To re-sync, we'd need to adjust startTimeSystem or frameCount,
                     // but for now we just log it as it should be much rarer now.
+                }
+
+                // Avoid a bursty catch-up (sending queued-up frames back-to-back as fast as
+                // possible) if rendering or socket work falls more than a frame behind: jump
+                // the frame counter forward to match real elapsed time instead of stepping
+                // through every missed frame.
+                if (now > nextFrameTimeSteady + frameDuration)
+                {
+                    auto elapsedTicks = duration_cast<steady_clock::duration>(now - startTimeSteady).count();
+                    auto frameTicks = frameDuration.count();
+                    frameCount = elapsedTicks / frameTicks + 1;
                 }
 
                 if (nextFrameTimeSteady < now - 1s) // Sane reset
@@ -370,6 +389,7 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
         jsonPair<SolidColorFill>(),
         jsonPair<PaletteEffect>(),
         jsonPair<StarfieldEffect>(),
+        jsonPair<StockBanner>(),
         jsonPair<MP4PlaybackEffect>(),
         make_pair("AuroraEffect", jsonPair<AuroraEffect>().second)
 };
