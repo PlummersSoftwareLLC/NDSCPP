@@ -8,7 +8,7 @@
             {
               "filePath": "./media/mp4/goldendollars.mp4",
               "name": "Money Video",
-              "type": "17MP4PlaybackEffect"
+              "type": "MP4PlaybackEffect"
             }
           ],
           "fps": 24
@@ -42,7 +42,7 @@
             {
               "name": "Starfield",
               "starCount": 100,
-              "type": "15StarfieldEffect"
+              "type": "StarfieldEffect"
             }
           ],
           "fps": 24
@@ -80,7 +80,7 @@
                 "r": 255
               },
               "name": "Yellow Window",
-              "type": "14SolidColorFill"
+              "type": "SolidColorFill"
             }
           ],
           "fps": 3
@@ -118,7 +118,7 @@
                 "r": 0
               },
               "name": "Blue Window",
-              "type": "14SolidColorFill"
+              "type": "SolidColorFill"
             }
           ],
           "fps": 3
@@ -156,7 +156,7 @@
                 "r": 0
               },
               "name": "Green Window",
-              "type": "14SolidColorFill"
+              "type": "SolidColorFill"
             }
           ],
           "fps": 3
@@ -242,7 +242,7 @@
                 ]
               },
               "rampedColor": false,
-              "type": "13PaletteEffect"
+              "type": "PaletteEffect"
             }
           ],
           "fps": 20
@@ -350,7 +350,7 @@
                 ]
               },
               "rampedColor": false,
-              "type": "13PaletteEffect"
+              "type": "PaletteEffect"
             }
           ],
           "fps": 24
@@ -429,7 +429,7 @@
               "erase": true,
               "mirrored": true,
               "name": "Bouncing Balls",
-              "type": "18BouncingBallEffect"
+              "type": "BouncingBallEffect"
             }
           ],
           "fps": 30
@@ -515,7 +515,7 @@
                 ]
               },
               "rampedColor": false,
-              "type": "13PaletteEffect"
+              "type": "PaletteEffect"
             }
           ],
           "fps": 30

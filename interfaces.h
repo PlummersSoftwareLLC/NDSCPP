@@ -178,6 +178,8 @@ public:
     virtual uint64_t GetLastBytesPerSecond() const = 0;
     virtual ClientResponse LastClientResponse() const = 0;
     virtual uint32_t GetReconnectCount() const = 0;
+    virtual uint32_t GetFailedConnectCount() const = 0;
+    virtual string GetLastSocketError() const = 0;
     virtual size_t GetCurrentQueueDepth() const = 0;
     virtual size_t GetQueueMaxSize() const = 0;
 

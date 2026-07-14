@@ -12,6 +12,9 @@ using namespace std::chrono;
 
 class StarfieldEffect : public LEDEffectBase
 {
+public:
+    static constexpr const char* TypeName = "StarfieldEffect";
+
 private:
     struct Star
     {
@@ -34,7 +37,7 @@ private:
 
 public:
     StarfieldEffect(const string& name, int starCount = 100)
-        : LEDEffectBase(name), _starCount(starCount), _rng(random_device{}()),
+        : LEDEffectBase(name, TypeName), _starCount(starCount), _rng(random_device{}()),
           _speedDist(5.0, 20.0),                        // Increased speed for hyperspace effect
           _directionDist(0, 2 * M_PI),                  // Full 360° angular range
           _brightnessDist(28, 255), _colorChanceDist(0, 1),

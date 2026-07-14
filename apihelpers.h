@@ -140,6 +140,12 @@ inline void StartCanvas(ApiRequestContext &context)
 {
     ApplyCanvasesRequest(context, [](shared_ptr<ICanvas> canvas)
     {
+        for (auto &feature : canvas->Features())
+        {
+            feature->Socket()->Stop();
+            feature->Socket()->Start();
+        }
+
         canvas->Effects().Start(*canvas);
     });
 }
@@ -149,6 +155,8 @@ inline void StopCanvas(ApiRequestContext &context)
     ApplyCanvasesRequest(context, [](shared_ptr<ICanvas> canvas)
     {
         canvas->Effects().Stop();
+        for (auto &feature : canvas->Features())
+            feature->Socket()->Stop();
     });
 }
 

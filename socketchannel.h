@@ -258,6 +258,8 @@ class SocketChannel : public ISocketChannel
     SpeedTracker _speedTracker;
 
     uint32_t _reconnectCount;
+    uint32_t _failedConnectCount;
+    string _lastSocketError;
     system_clock::time_point _lastInvalidByteWarning;
 
     queue<vector<uint8_t>> _frameQueue;
@@ -277,8 +279,10 @@ public:
           _lastClientResponse(),
           _lastConnectionAttempt(system_clock::now()),
           _reconnectCount(0),
-          _totalQueuedBytes(0),
-          _lastInvalidByteWarning(system_clock::now() - 60s)
+          _failedConnectCount(0),
+          _lastSocketError(),
+          _lastInvalidByteWarning(system_clock::now() - 60s),
+          _totalQueuedBytes(0)
     {
     }
 
@@ -308,6 +312,18 @@ public:
     {
         lock_guard lock(_mutex);
         return _reconnectCount;
+    }
+
+    uint32_t GetFailedConnectCount() const override
+    {
+        lock_guard lock(_mutex);
+        return _failedConnectCount;
+    }
+
+    string GetLastSocketError() const override
+    {
+        lock_guard lock(_mutex);
+        return _lastSocketError;
     }
 
     virtual uint64_t GetLastBytesPerSecond() const override
@@ -421,6 +437,22 @@ bool EnqueueFrame(vector<uint8_t>&& frameData) override
 }
 
 private:
+
+    void RecordConnectFailure(const string& error)
+    {
+        lock_guard lock(_mutex);
+        _isConnected = false;
+        _failedConnectCount++;
+        _lastSocketError = error;
+    }
+
+    void RecordConnectSuccess()
+    {
+        lock_guard lock(_mutex);
+        _isConnected = true;
+        _reconnectCount++;
+        _lastSocketError.clear();
+    }
 
     // Worker Loop
     //
@@ -676,7 +708,10 @@ private:
 
         int tempSocket = socket(AF_INET, SOCK_STREAM, 0);
         if (tempSocket == -1)
+        {
+            RecordConnectFailure("socket failed: " + string(strerror(errno)));
             return false;
+        }
 
         struct sockaddr_in serverAddr;
         memset(&serverAddr, 0, sizeof(serverAddr));
@@ -686,6 +721,7 @@ private:
         if (inet_pton(AF_INET, _hostName.c_str(), &serverAddr.sin_addr) <= 0)
         {
             logger->warn("Invalid address for {} [{}]", _hostName, _friendlyName);
+            RecordConnectFailure("invalid address: " + _hostName);
             close(tempSocket);
             return false;
         }
@@ -694,6 +730,7 @@ private:
         if (!SetSocketOptions(tempSocket))
         {
             logger->warn("Could not set socket options for {} [{}]", _hostName, _friendlyName);
+            RecordConnectFailure("could not set socket options");
             close(tempSocket);
             return false;
         }
@@ -705,6 +742,7 @@ private:
             if (errno != EINPROGRESS)
             {
                 logger->debug("Could not connect to {} [{}] errno={}", _hostName, _friendlyName, errno);
+                RecordConnectFailure("connect failed: " + string(strerror(errno)));
                 close(tempSocket);
                 return false;
             }
@@ -717,6 +755,7 @@ private:
             if (poll(&pfd, 1, kConnectTimeout.count()) <= 0)
             {
                 logger->debug("Connection timeout to {} [{}]", _hostName, _friendlyName);
+                RecordConnectFailure("connection timeout");
                 close(tempSocket);
                 return false;
             }
@@ -726,16 +765,19 @@ private:
             socklen_t len = sizeof(error);
             if (getsockopt(tempSocket, SOL_SOCKET, SO_ERROR, &error, &len) < 0 || error != 0)
             {
+                RecordConnectFailure(error == 0
+                    ? "connect status failed: " + string(strerror(errno))
+                    : "connect failed: " + string(strerror(error)));
                 close(tempSocket);
                 return false;
             }
         }
 
-        _reconnectCount++;
-        if (_reconnectCount == 1)
+        RecordConnectSuccess();
+        if (GetReconnectCount() == 1)
             logger->info("Connected to {}:{} [{}]", _hostName, _port, _friendlyName);
         else
-            logger->debug("Reconnection #{} to {}:{} [{}]", _reconnectCount, _hostName, _port, _friendlyName);
+            logger->debug("Reconnection #{} to {}:{} [{}]", GetReconnectCount(), _hostName, _port, _friendlyName);
 
         _socketFd = tempSocket;
         return true;
@@ -775,6 +817,8 @@ inline void to_json(nlohmann::json &j, const ISocketChannel & socket)
         j["friendlyName"] = socket.FriendlyName();
         j["isConnected"] = socket.IsConnected();
         j["reconnectCount"] = socket.GetReconnectCount();
+        j["failedConnectCount"] = socket.GetFailedConnectCount();
+        j["lastSocketError"] = socket.GetLastSocketError();
         j["queueDepth"] = socket.GetCurrentQueueDepth();
         j["queueMaxSize"] = socket.GetQueueMaxSize();
         j["bytesPerSecond"] = socket.GetLastBytesPerSecond();

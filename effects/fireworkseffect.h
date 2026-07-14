@@ -14,6 +14,9 @@ using namespace std::chrono;
 
 class FireworksEffect : public LEDEffectBase
 {
+public:
+    static constexpr const char* TypeName = "FireworksEffect";
+
 private:
     struct Particle
     {
@@ -68,7 +71,7 @@ private:
     double _particleSize = 1.0;
 
 public:
-    FireworksEffect(const string &name) : LEDEffectBase(name), _rng(random_device{}())
+    FireworksEffect(const string &name) : LEDEffectBase(name, TypeName), _rng(random_device{}())
     {
     }
 
@@ -80,8 +83,8 @@ public:
                     double particleHoldTime, 
                     double particleFadeTime, 
                     double particleSize)
-        : LEDEffectBase(name), 
-          _maxSpeed(maxSpeed), 
+        : LEDEffectBase(name, TypeName),
+          _maxSpeed(maxSpeed),
           _newParticleProbability(newParticleProbability), 
           _particlePreignitionTime(particlePreignitionTime), 
           _particleIgnition(particleIgnition), 

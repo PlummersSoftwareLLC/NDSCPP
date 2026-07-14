@@ -112,8 +112,9 @@ public:
 
         const auto& graphics = _canvas->Graphics();
 
-        // Fast path for full canvas. 
-        if (__builtin_expect(_width == graphics.Width() && _height == graphics.Height() && _offsetX == 0 && _offsetY == 0, 1))
+        // Fast path for full canvas.  We assume this is the default case and optimize for it by telling the compiler to expect it.
+        if (__builtin_expect(_width == graphics.Width() && _height == graphics.Height() && _offsetX == 0 && _offsetY == 0 && (!_reversed || _height == 1), 1))
+
             return Utilities::ConvertPixelsToByteArray(graphics.GetPixels(), _reversed, _redGreenSwap);
 
         // Pre-calculate the final buffer size (3 bytes per pixel)
@@ -124,7 +125,9 @@ public:
         {
             for (uint32_t x = 0; x < _width; ++x)
             {
-                uint32_t canvasX = x + _offsetX;
+                uint32_t canvasX = (_reversed && _height > 1)
+                    ? (_offsetX + _width - 1 - x)
+                    : (x + _offsetX);
                 uint32_t canvasY = y + _offsetY;
 
                 // Calculate output position directly in bytes
@@ -155,7 +158,7 @@ public:
             }
         }
 
-        if (_reversed)
+        if (_reversed && _height == 1)
         {
             const size_t numPixels = result.size() / 3;
             for (size_t i = 0; i < numPixels / 2; ++i) {
@@ -211,7 +214,9 @@ inline void to_json(nlohmann::json& j, const ILEDFeature & feature)
             {"isConnected",       feature.Socket()->IsConnected()},
             {"queueDepth",        feature.Socket()->GetCurrentQueueDepth()},
             {"queueMaxSize",      feature.Socket()->GetQueueMaxSize()},
-            {"reconnectCount",    feature.Socket()->GetReconnectCount()}
+            {"reconnectCount",    feature.Socket()->GetReconnectCount()},
+            {"failedConnectCount", feature.Socket()->GetFailedConnectCount()},
+            {"lastSocketError",   feature.Socket()->GetLastSocketError()}
         };
 
     const auto &response = feature.Socket()->LastClientResponse();

@@ -7,6 +7,9 @@ using namespace std;
 
 class ColorWaveEffect : public LEDEffectBase
 {
+public:
+    static constexpr const char* TypeName = "ColorWaveEffect";
+
 private:
     double _hue; // Current hue for the wave
     double _speed; // Speed of hue change
@@ -14,7 +17,7 @@ private:
 
 public:
     ColorWaveEffect(const string& name, double speed = 0.5, double waveFrequency = 10.0)
-        : LEDEffectBase(name), _hue(0.0), _speed(speed), _waveFrequency(waveFrequency)
+        : LEDEffectBase(name, TypeName), _hue(0.0), _speed(speed), _waveFrequency(waveFrequency)
     {
     }
 

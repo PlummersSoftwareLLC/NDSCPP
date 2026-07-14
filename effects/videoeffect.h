@@ -18,6 +18,9 @@ extern "C"
 
 class MP4PlaybackEffect : public LEDEffectBase
 {
+public:
+    static constexpr const char* TypeName = "MP4PlaybackEffect";
+
 private:
     string                  _filePath;
     AVFormatContext*        _formatCtx = nullptr;
@@ -114,7 +117,7 @@ private:
 public:
 
     MP4PlaybackEffect(const string& name, const string& filePath)
-        : LEDEffectBase(name), _filePath(filePath) {}
+        : LEDEffectBase(name, TypeName), _filePath(filePath) {}
 
     ~MP4PlaybackEffect()
     {

@@ -16,8 +16,11 @@ using namespace std::chrono;
 #include "../pixeltypes.h"
 #include "../palette.h"
 
-class PaletteEffect : public LEDEffectBase 
+class PaletteEffect : public LEDEffectBase
 {
+public:
+    static constexpr const char* TypeName = "PaletteEffect";
+
 private:
     double _iPixel = 0;
     double _iColor;
@@ -45,8 +48,8 @@ public:
                   double   brightness = 1.0,
                   bool     mirrored = false,
                   bool     bBlend   = true) 
-        : LEDEffectBase(name),
-          _Palette(colors, bBlend), 
+        : LEDEffectBase(name, TypeName),
+          _Palette(colors, bBlend),
           _iColor(0),
           _LEDColorPerSecond(ledColorPerSecond),
           _LEDScrollSpeed(ledScrollSpeed),

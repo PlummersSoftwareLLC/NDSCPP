@@ -7,6 +7,7 @@ using namespace chrono;
 #include "effects/misceffects.h"
 #include "effects/paletteeffect.h"
 #include "effects/starfield.h"
+#include "effects/stockbannereffect.h"
 #include "effects/videoeffect.h"
 #include "effects/bouncingballeffect.h"
 #include "effects/auroraeffect.h"
@@ -18,6 +19,7 @@ using namespace chrono;
 // can also be used to clear all effects.
 
 #include "interfaces.h"
+#include <algorithm>
 #include <vector>
 #include <mutex>
 
@@ -188,7 +190,11 @@ public:
 
         _workerThread = thread([this, &canvas]()
         {
-            const auto frameDurationNs = nanoseconds(1000000000LL / _fps);
+            const auto effectiveFps = max<uint16_t>(1, _fps);
+            // Computed via a double-precision intermediate rather than truncating
+            // nanoseconds(1'000'000'000LL / fps) up front, so FPS values that don't
+            // divide evenly into a second don't bias the frame clock low every frame.
+            const auto frameDuration = duration_cast<steady_clock::duration>(duration<double>(1.0 / effectiveFps));
             // next two non-const because we may need to reset them if we fall behind
             auto startTimeSteady = steady_clock::now();
             auto startTimeSystem = system_clock::now();
@@ -234,8 +240,8 @@ public:
 
                 // Calculate the actual target timestamp for this packet based on the wall clock
                 frameCount++;
-                auto nextFrameTimeSteady = startTimeSteady + (frameDurationNs * frameCount);
-                auto packetTimestamp = startTimeSystem + (frameDurationNs * frameCount);
+                auto nextFrameTimeSteady = startTimeSteady + (frameDuration * frameCount);
+                auto packetTimestamp = startTimeSystem + duration_cast<system_clock::duration>(frameDuration * frameCount);
 
                 if (activeIndex != -1)
                 {
@@ -255,7 +261,8 @@ public:
 
                     for (const auto &feature : canvas.Features())
                     {
-                        feature->Socket()->EnqueueFrame(feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp)));
+                        auto frame = feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp));
+                        feature->Socket()->EnqueueFrame(feature->Socket()->CompressFrame(frame));
                     }
                     _lastScheduleState = true;
                     lastHeartbeatTime = now;
@@ -269,7 +276,8 @@ public:
                         }
                         for (const auto &feature : canvas.Features())
                         {
-                            feature->Socket()->EnqueueFrame(feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp)));
+                            auto frame = feature->GetDataFrame(time_point_cast<system_clock::duration>(packetTimestamp));
+                            feature->Socket()->EnqueueFrame(feature->Socket()->CompressFrame(frame));
                         }
 
                         if (_lastScheduleState)
@@ -292,6 +300,17 @@ public:
                     // but for now we just log it as it should be much rarer now.
                 }
 
+                // Avoid a bursty catch-up (sending queued-up frames back-to-back as fast as
+                // possible) if rendering or socket work falls more than a frame behind: jump
+                // the frame counter forward to match real elapsed time instead of stepping
+                // through every missed frame.
+                if (now > nextFrameTimeSteady + frameDuration)
+                {
+                    auto elapsedTicks = duration_cast<steady_clock::duration>(now - startTimeSteady).count();
+                    auto frameTicks = frameDuration.count();
+                    frameCount = elapsedTicks / frameTicks + 1;
+                }
+
                 if (nextFrameTimeSteady < now - 1s) // Sane reset
                 {
                     logger->warn("Canvas '{}' fell behind by >1s, resetting frame clock.", canvas.Name());
@@ -303,7 +322,7 @@ public:
                 if (nextFrameTimeSteady > now)
                     this_thread::sleep_until(nextFrameTimeSteady);
             }
- });
+        });
     }
 
     // Stop the worker thread
@@ -356,7 +375,7 @@ pair<string, pair<EffectSerializer, EffectDeserializer>> jsonPair()
         return j.get<shared_ptr<T>>();
     };
 
-    return make_pair(typeid(T).name(), make_pair(serializer, deserializer));
+    return make_pair(string(T::TypeName), make_pair(serializer, deserializer));
 }
 
 // Map with effect (de)serialization functions
@@ -370,8 +389,9 @@ static const map<string, pair<EffectSerializer, EffectDeserializer>> to_from_jso
         jsonPair<SolidColorFill>(),
         jsonPair<PaletteEffect>(),
         jsonPair<StarfieldEffect>(),
+        jsonPair<StockBanner>(),
         jsonPair<MP4PlaybackEffect>(),
-        make_pair("AuroraEffect", jsonPair<AuroraEffect>().second)
+        jsonPair<AuroraEffect>()
 };
 
 // Dynamically serialize an effect to JSON based on its actual type
@@ -380,13 +400,6 @@ inline void to_json(nlohmann::json &j, const ILEDEffect &effect)
 {
     string type = effect.Type();
     auto it = to_from_json_map.find(type);
-    if (it == to_from_json_map.end())
-    {
-        // Fallback to mangled name for backward compatibility and unregistered types
-        type = typeid(effect).name();
-        it = to_from_json_map.find(type);
-    }
-
     if (it == to_from_json_map.end())
     {
         logger->error("Unknown effect type for serialization: {}", type);
@@ -407,10 +420,21 @@ inline void to_json(nlohmann::json &j, const ILEDEffect &effect)
 
 inline void from_json(const nlohmann::json &j, shared_ptr<ILEDEffect> & effect)
 {
-    auto it = to_from_json_map.find(j["type"]);
+    const string type = j.at("type").get<string>();
+    auto it = to_from_json_map.find(type);
     if (it == to_from_json_map.end())
     {
-        logger->error("Unknown effect type for deserialization: {}, replacing with magenta fill", j["type"].get<string>());
+        // Fallback for config files saved under the pre-refactor typeid-mangled names,
+        // which are a run of leading digits (the Itanium ABI's name-length prefix)
+        // followed by the plain class name, e.g. "15StarfieldEffect".
+        auto firstNonDigit = type.find_first_not_of("0123456789");
+        if (firstNonDigit != string::npos && firstNonDigit > 0)
+            it = to_from_json_map.find(type.substr(firstNonDigit));
+    }
+
+    if (it == to_from_json_map.end())
+    {
+        logger->error("Unknown effect type for deserialization: {}, replacing with magenta fill", type);
         effect = make_shared<SolidColorFill>("Unknown Effect Type", CRGB::Magenta);
         return;
     }
@@ -424,7 +448,7 @@ inline void from_json(const nlohmann::json &j, shared_ptr<ILEDEffect> & effect)
     }
 }
 
-// IEffectsManager <-- JSON
+// IEffectsManager --> JSON
 
 inline void to_json(nlohmann::json &j, const IEffectsManager &manager)
 {
@@ -443,7 +467,7 @@ inline void to_json(nlohmann::json &j, const IEffectsManager &manager)
         j["effects"].push_back(*effect);
 };
 
-// IEffectsManager --> JSON
+// IEffectsManager <-- JSON
 
 inline void from_json(const nlohmann::json &j, IEffectsManager &manager)
 {
